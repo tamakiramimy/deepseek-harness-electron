@@ -4,11 +4,31 @@
 
 `DeepSeek Harness Desktop` 是给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 准备的 Electron 桌面工作台。
 
-当前仓库是 Electron 外壳：负责窗口、安全隔离、工作区选择和本地进程管理。官方 DeepSeek Harness 位于独立的 `DeepSeek-Harness-Dist/` 目录中，用户可以自行构建、更新或整个替换该目录。
+![DeepSeek Harness Desktop 运行中的界面](docs/images/desktop-running.png)
 
-启动应用后，Electron Utility Host 从该目录启动官方 Harness Web UI；服务绑定随机 loopback 端口，并嵌入 Electron 窗口中央区域。Electron 项目本身不锁定 `@deepseek-ai/dsh` 的版本。
+## 立即开始
 
-发布时，四个 Electron Shell 安装包均不包含官方 Harness。官方 Runtime 作为第五个独立发布物 `DeepSeek-Harness-Dist-<version>.zip` 提供，其中包含四个平台架构的 Runtime 子目录。
+在 [Releases](https://github.com/tamakiramimy/deepseek-harness-electron/releases) 中选择**同一版本**的两个文件。每个 Release 一共提供五个产物：一个 Runtime Bundle 和四个 Shell 安装包。
+
+| 设备 | 下载的 Shell 安装包 |
+| --- | --- |
+| 所有设备 | `DeepSeek-Harness-Dist-<version>.zip` |
+| macOS Apple Silicon | `DeepSeek.Harness.Desktop-<version>-darwin-arm64.dmg` |
+| macOS Intel | `DeepSeek.Harness.Desktop-<version>-darwin-x64.dmg` |
+| Windows ARM | `DeepSeek.Harness.Desktop-<version>-win32-arm64.exe` |
+| Windows x64 | `DeepSeek.Harness.Desktop-<version>-win32-x64.exe` |
+
+1. 下载 Runtime Bundle，再按设备选择一个 Shell 安装包。
+2. 正常安装 Shell；解压 Runtime Bundle，保留解压后的 `DeepSeek-Harness-Dist` 文件夹名称。
+3. 将该文件夹放在应用文件旁边，然后启动应用：
+
+```text
+应用所在目录/
+|- DeepSeek Harness Desktop.app 或 DeepSeek Harness Desktop.exe
+`- DeepSeek-Harness-Dist/
+```
+
+Shell 会自动选择当前设备所需的 Runtime，无需额外设置。
 
 ## 当前状态
 
@@ -94,7 +114,7 @@ pnpm dev
 
 Harness 使用系统 `userData/harness` 目录作为自身的 `DSH_HOME`。它始终绑定随机 `127.0.0.1` 端口，不会暴露到局域网；窗口顶部状态栏会显示当前 loopback URL。
 
-## 更新或替换官方 Runtime
+## 高级：更新或替换官方 Runtime
 
 Electron 只要求 Runtime Dist 根目录内有 `runtime-manifest.json`，且其中的 `entry` 指向同目录内的官方 CLI。默认 manifest：
 
@@ -104,27 +124,6 @@ Electron 只要求 Runtime Dist 根目录内有 `runtime-manifest.json`，且其
 	"entry": "node_modules/@deepseek-ai/dsh/lib/bin.js"
 }
 ```
-
-### 使用发布版 Runtime Bundle
-
-GitHub Release 中的第五个产出物是 `DeepSeek-Harness-Dist-<version>.zip`。解压后目录包含统一索引和四个目标平台的完整 Runtime：
-
-```text
-DeepSeek-Harness-Dist/
-	runtime-index.json
-	darwin-arm64/
-	darwin-x64/
-	win32-arm64/
-	win32-x64/
-```
-
-Shell 会根据当前 `process.platform` 和 `process.arch` 自动选择对应子目录。例如 macOS Apple Silicon 选择 `darwin-arm64/`，Windows x64 选择 `win32-x64/`。
-
-每个 Shell 发布包只包含 Electron 代码。安装 Shell 后，下载并解压 Runtime Bundle，然后通过以下任一方式让 Shell 找到 Bundle 根目录：
-
-1. 将 `DeepSeek-Harness-Dist/` 放在 Shell 安装目录旁边。
-2. 将其放入应用用户数据目录下的 `DeepSeek-Harness-Dist/`。
-3. 启动 Shell 时设置 `DEEPSEEK_HARNESS_DIST` 为解压后 Bundle 根目录。
 
 ### 使用其他 npm 版本
 

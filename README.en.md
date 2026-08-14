@@ -4,11 +4,31 @@ English | [中文](README.md)
 
 `DeepSeek Harness Desktop` is an Electron desktop shell for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
 
-This repository owns the window, security isolation, local process lifecycle, and packaging. The official DeepSeek Harness runtime lives in a separate, replaceable `DeepSeek-Harness-Dist/` directory. You can build, update, or replace that directory independently of the Electron shell.
+![DeepSeek Harness Desktop running](docs/images/desktop-running.png)
 
-At startup, an Electron Utility Host launches the official Harness Web UI from that directory on a random loopback port and embeds it in the desktop window. The Electron project does not pin an `@deepseek-ai/dsh` version.
+## Start Here
 
-At release time, the four Electron Shell installers do not contain official Harness. Official Runtime is the fifth independent release asset, `DeepSeek-Harness-Dist-<version>.zip`, which contains Runtime subdirectories for all four supported platform architectures.
+From [Releases](https://github.com/tamakiramimy/deepseek-harness-electron/releases), download two files from the **same version**. Each release has five assets: one Runtime Bundle and four Shell installers.
+
+| Your device | Shell installer to download |
+| --- | --- |
+| Every device | `DeepSeek-Harness-Dist-<version>.zip` |
+| macOS Apple Silicon | `DeepSeek.Harness.Desktop-<version>-darwin-arm64.dmg` |
+| macOS Intel | `DeepSeek.Harness.Desktop-<version>-darwin-x64.dmg` |
+| Windows ARM | `DeepSeek.Harness.Desktop-<version>-win32-arm64.exe` |
+| Windows x64 | `DeepSeek.Harness.Desktop-<version>-win32-x64.exe` |
+
+1. Download the Runtime Bundle and the one Shell installer for your device.
+2. Install the Shell normally. Extract the Runtime Bundle and keep the extracted folder named `DeepSeek-Harness-Dist`.
+3. Place that folder beside the installed application, then launch the app:
+
+```text
+Application directory/
+|- DeepSeek Harness Desktop.app or DeepSeek Harness Desktop.exe
+`- DeepSeek-Harness-Dist/
+```
+
+The Shell selects the matching Runtime automatically. No further setup is needed.
 
 ## Status
 
@@ -94,7 +114,7 @@ This command:
 
 Harness uses the application's `userData/harness` directory as `DSH_HOME`. It binds only to a random `127.0.0.1` port and is never exposed to the LAN. The compact status bar shows the active loopback URL.
 
-## Update or Replace the Harness Runtime
+## Advanced: Update or Replace the Harness Runtime
 
 Electron requires a `runtime-manifest.json` at the Runtime Dist root. Its `entry` must point to an official CLI file relative to that root. The default manifest is:
 
@@ -104,27 +124,6 @@ Electron requires a `runtime-manifest.json` at the Runtime Dist root. Its `entry
   "entry": "node_modules/@deepseek-ai/dsh/lib/bin.js"
 }
 ```
-
-### Use the release Runtime Bundle
-
-The fifth GitHub Release asset is `DeepSeek-Harness-Dist-<version>.zip`. Once extracted, it contains a shared index and four complete target runtimes:
-
-```text
-DeepSeek-Harness-Dist/
-  runtime-index.json
-  darwin-arm64/
-  darwin-x64/
-  win32-arm64/
-  win32-x64/
-```
-
-The Shell automatically selects the matching child directory from `process.platform` and `process.arch`. For example, macOS Apple Silicon selects `darwin-arm64/`, while Windows x64 selects `win32-x64/`.
-
-Each Shell release contains only Electron code. After installing a Shell, download and extract the Runtime Bundle, then make its root discoverable in one of these ways:
-
-1. Place `DeepSeek-Harness-Dist/` next to the Shell installation.
-2. Place it in the application user-data directory as `DeepSeek-Harness-Dist/`.
-3. Set `DEEPSEEK_HARNESS_DIST` to the extracted Bundle root before launching the Shell.
 
 ### Use another npm version
 
