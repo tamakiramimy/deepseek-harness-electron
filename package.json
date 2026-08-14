@@ -1,6 +1,6 @@
 {
   "name": "deepseek-harness-electron",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A secure cross-platform desktop workbench for DeepSeek Harness.",
   "author": "DeepSeek Harness Desktop contributors",
   "copyright": "Copyright © 2026 DeepSeek Harness Desktop contributors",
