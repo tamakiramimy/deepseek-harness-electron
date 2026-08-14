@@ -148,8 +148,6 @@ jobs:
         with:
           name: runtime-win32-x64
           path: runtime-output/DeepSeek-Harness-Dist/win32-x64
-      - name: Add Runtime Bundle README
-        run: cp DeepSeek-Harness-Dist.example/README.md runtime-output/DeepSeek-Harness-Dist/README.md
       - name: Write and validate Runtime Bundle index
         env:
           DEEPSEEK_HARNESS_DIST: runtime-output/DeepSeek-Harness-Dist

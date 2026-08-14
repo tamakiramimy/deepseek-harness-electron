@@ -9,6 +9,8 @@ resources/harness/
 DeepSeek-Harness-Dist/
 harness-home/
 Temp-DeepSeek-Harness-Electron/
+runtime-output/
+release-assets/
 
 # Local tooling state and generated diagnostics.
 .vite/

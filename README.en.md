@@ -73,7 +73,7 @@ DeepSeek-Harness-Dist/
     ...official Host, plugins, and native modules...
 ```
 
-This directory is ignored by Git and is not committed with the Electron shell. See [DeepSeek-Harness-Dist.example](DeepSeek-Harness-Dist.example) for the runtime contract.
+This directory is ignored by Git and is not committed with the Electron shell.
 
 Do not commit API keys or signing credentials.
 

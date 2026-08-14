@@ -73,7 +73,7 @@ DeepSeek-Harness-Dist/
 		...官方 Host、插件和原生模块...
 ```
 
-这个目录被 `.gitignore` 排除，不会被提交进 Electron 外壳仓库。参考模板位于 [DeepSeek-Harness-Dist.example](DeepSeek-Harness-Dist.example)。
+这个目录被 `.gitignore` 排除，不会被提交进 Electron 外壳仓库。
 
 不要将 API Key 或签名凭据提交到本仓库。
 
