@@ -30,12 +30,20 @@ corepack enable
 pnpm --version
 ```
 
+## 使用约定
+
+除非另有说明，后续命令都在项目根目录执行。若当前位于 Git 工作区的任意子目录，可先运行：
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+```
+
 ## 一次性安装
 
 ### 安装 Electron 桌面项目
 
 ```sh
-cd /Volumes/MAC-DATA/Github/deepseek-harness-electron
+cd "$(git rev-parse --show-toplevel)"
 pnpm install
 ```
 
@@ -76,7 +84,7 @@ ELECTRON_GET_USE_PROXY=true pnpm exec install-electron --no
 ## 运行桌面应用
 
 ```sh
-cd /Volumes/MAC-DATA/Github/deepseek-harness-electron
+cd "$(git rev-parse --show-toplevel)"
 pnpm dev
 ```
 
@@ -142,7 +150,7 @@ pnpm harness:dist:validate
 使用环境变量指定任意绝对路径的 Runtime Dist：
 
 ```sh
-DEEPSEEK_HARNESS_DIST=/absolute/path/to/DeepSeek-Harness-Dist pnpm dev
+DEEPSEEK_HARNESS_DIST="<runtime-dist-directory>" pnpm dev
 ```
 
 发行版优先查找该环境变量，其次查找用户数据目录下的 `DeepSeek-Harness-Dist/`，最后使用安装包内置的 `Resources/DeepSeek-Harness-Dist/`。因此用户可在不修改应用包的情况下替换 runtime。
@@ -168,11 +176,9 @@ pnpm dev
 
 桌面窗口中可：
 
-- 使用原生目录选择器打开工作区；
-- 关闭工作区或在重启后恢复已选择的工作区；
-- 查看 Utility Host 与官方 Harness 的启动状态；
-- 在中央官方 Harness 页面中创建会话、选择模型和处理审批；
-- 使用右上方的 `Workbench` / `Open Harness` 在本地工作台与官方页面之间切换。
+- 在中央官方 Harness 页面中选择工作区、创建会话、选择模型和处理审批；
+- 在顶部状态栏查看 Utility Host 与官方 Harness 的运行状态；
+- 通过关闭桌面窗口停止 Utility Host 与官方 Harness 子进程。
 
 停止服务时，在开发终端按 `Ctrl+C`。退出应用时 Utility Host 会停止其官方 Harness 子进程。
 
@@ -215,7 +221,7 @@ electron-builder 会将 `DeepSeek-Harness-Dist/` 原样复制到安装包的 `Re
 Electron 下载器没有取得运行时二进制。执行：
 
 ```sh
-cd /Volumes/MAC-DATA/Github/deepseek-harness-electron
+cd "$(git rev-parse --show-toplevel)"
 ELECTRON_GET_USE_PROXY=true pnpm exec install-electron --no
 pnpm dev
 ```

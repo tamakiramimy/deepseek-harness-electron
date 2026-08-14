@@ -3,10 +3,34 @@ out/
 dist/
 release/
 coverage/
+
+# Local Harness runtime and test state.
 resources/harness/
 DeepSeek-Harness-Dist/
 harness-home/
+Temp-DeepSeek-Harness-Electron/
+
+# Local tooling state and generated diagnostics.
+.vite/
+.electron/
+.cache/
+.pnpm-store/
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+core
+core.*
+
+# Local secrets and code-signing material.
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.key
+*.pem
+*.p12
+*.pfx
+
 .DS_Store
 *.log
-.env
-Temp*
