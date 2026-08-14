@@ -50,7 +50,7 @@ async function startHarness(harnessHome: string, runtimeRoot: string): Promise<v
       DSH_HOME: harnessHome,
       ELECTRON_RUN_AS_NODE: '1',
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: 'ignore',
   })
   harnessProcess = child
   child.once('error', () => reportFailure('Official DeepSeek Harness could not start.'))

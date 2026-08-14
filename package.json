@@ -21,6 +21,8 @@
     "harness:dist:init": "node scripts/harness-dist.mjs --init",
     "harness:dist:install": "node scripts/harness-dist.mjs --install",
     "harness:dist:validate": "node scripts/harness-dist.mjs --validate",
+    "harness:dist:smoke": "node scripts/smoke-harness-dist.mjs",
+    "release:manifest": "node scripts/write-release-manifest.mjs",
     "package": "pnpm build && pnpm harness:dist:validate && electron-builder --config electron-builder.yml",
     "package:mac": "pnpm build && pnpm harness:dist:validate && electron-builder --mac --config electron-builder.yml",
     "package:mac:arm64": "pnpm build && pnpm harness:dist:validate && electron-builder --mac dmg --arm64 --config electron-builder.yml",

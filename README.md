@@ -196,6 +196,18 @@ pnpm package:linux
 
 electron-builder 会将 `DeepSeek-Harness-Dist/` 原样复制到安装包的 `Resources/DeepSeek-Harness-Dist/`。跨平台发布应在对应平台的 CI 或构建机上完成签名与打包；不要把本机 macOS 构建产物当作 Windows 或 Linux 的发布验证。
 
+## 原生多平台构建
+
+工作流 [package.yml](.github/workflows/package.yml) 在原生 macOS arm64、Windows x64 和 Linux x64 runner 上分别执行以下步骤：
+
+1. 安装 Electron 外壳依赖。
+2. 在该平台创建 `DeepSeek-Harness-Dist`，因此原生模块与目标平台匹配。
+3. 启动官方 Harness Web UI 进行 loopback smoke test。
+4. 生成对应安装包和 `SHA256SUMS.txt`。
+5. 上传安装包、blockmap 和校验清单为 workflow artifact。
+
+从 GitHub Actions 的 **Package Desktop Installers** 工作流手动触发构建。可选的 `harness_version` 输入用于选择官方 npm 版本或 tag；留空时使用 `latest`。
+
 ## 常见问题
 
 ### `Electron uninstall` 或 Electron 二进制缺失
