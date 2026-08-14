@@ -73,15 +73,7 @@ DeepSeek-Harness-Dist/
 
 这个目录被 `.gitignore` 排除，不会被提交进 Electron 外壳仓库。参考模板位于 [DeepSeek-Harness-Dist.example](DeepSeek-Harness-Dist.example)。
 
-如果公司网络或代理环境导致 Electron 二进制首次下载失败，设置常规代理变量后重新安装二进制：
-
-```sh
-export HTTP_PROXY=http://proxy.example:8080
-export HTTPS_PROXY=http://proxy.example:8080
-ELECTRON_GET_USE_PROXY=true pnpm exec install-electron --no
-```
-
-不要把代理地址、账号、密码或 API Key 写入本仓库的 Git 跟踪文件。
+不要将 API Key 或签名凭据提交到本仓库。
 
 ## 运行桌面应用
 
@@ -214,21 +206,19 @@ electron-builder 会将 `DeepSeek-Harness-Dist/` 原样复制到安装包的 `Re
 4. 生成对应安装包和 `SHA256SUMS.txt`。
 5. 上传安装包、blockmap 和校验清单为 workflow artifact。
 
+当前架构矩阵如下：
+
+| 平台 | 架构 | GitHub-hosted runner | 打包命令 |
+| --- | --- | --- | --- |
+| macOS | arm64 | `macos-14` | `pnpm package:mac:arm64` |
+| macOS | x64 | `macos-15-intel` | `pnpm package:mac:x64` |
+| Windows | arm64 | `windows-11-arm` | `pnpm package:win:arm64` |
+| Windows | x64 | `windows-2025` | `pnpm package:win:x64` |
+| Linux | x64 | `ubuntu-24.04` | `pnpm package:linux` |
+
 从 GitHub Actions 的 **Package Desktop Installers** 工作流手动触发构建。可选的 `harness_version` 输入用于选择官方 npm 版本或 tag；留空时使用 `latest`。
 
 ## 常见问题
-
-### `Electron uninstall` 或 Electron 二进制缺失
-
-Electron 下载器没有取得运行时二进制。执行：
-
-```sh
-cd "$(git rev-parse --show-toplevel)"
-ELECTRON_GET_USE_PROXY=true pnpm exec install-electron --no
-pnpm dev
-```
-
-如果网络需要代理，同时设置 `HTTP_PROXY` 和 `HTTPS_PROXY`，见前面的安装步骤。
 
 ### 官方 Web UI 能打开但不能发送消息
 

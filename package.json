@@ -26,7 +26,10 @@
     "package": "pnpm build && pnpm harness:dist:validate && electron-builder --config electron-builder.yml",
     "package:mac": "pnpm build && pnpm harness:dist:validate && electron-builder --mac --config electron-builder.yml",
     "package:mac:arm64": "pnpm build && pnpm harness:dist:validate && electron-builder --mac dmg --arm64 --config electron-builder.yml",
+    "package:mac:x64": "pnpm build && pnpm harness:dist:validate && electron-builder --mac dmg --x64 --config electron-builder.yml",
     "package:win": "pnpm build && pnpm harness:dist:validate && electron-builder --win --config electron-builder.yml",
+    "package:win:arm64": "pnpm build && pnpm harness:dist:validate && electron-builder --win nsis --arm64 --config electron-builder.yml",
+    "package:win:x64": "pnpm build && pnpm harness:dist:validate && electron-builder --win nsis --x64 --config electron-builder.yml",
     "package:linux": "pnpm build && pnpm harness:dist:validate && electron-builder --linux --config electron-builder.yml"
   },
   "dependencies": {

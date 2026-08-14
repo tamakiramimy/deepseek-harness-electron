@@ -73,15 +73,7 @@ DeepSeek-Harness-Dist/
 
 This directory is ignored by Git and is not committed with the Electron shell. See [DeepSeek-Harness-Dist.example](DeepSeek-Harness-Dist.example) for the runtime contract.
 
-If your network requires a proxy to download Electron, install the Electron binary with proxy support enabled:
-
-```sh
-export HTTP_PROXY=http://proxy.example:8080
-export HTTPS_PROXY=http://proxy.example:8080
-ELECTRON_GET_USE_PROXY=true pnpm exec install-electron --no
-```
-
-Do not commit proxy credentials, API keys, or signing credentials.
+Do not commit API keys or signing credentials.
 
 ## Run the Desktop App
 
@@ -222,21 +214,19 @@ The [Package Desktop Installers workflow](.github/workflows/package.yml) runs on
 4. Builds the target installer and `SHA256SUMS.txt`.
 5. Uploads installers, blockmaps, and checksums as workflow artifacts.
 
+The current architecture matrix is:
+
+| Platform | Architecture | GitHub-hosted runner | Package command |
+| --- | --- | --- | --- |
+| macOS | arm64 | `macos-14` | `pnpm package:mac:arm64` |
+| macOS | x64 | `macos-15-intel` | `pnpm package:mac:x64` |
+| Windows | arm64 | `windows-11-arm` | `pnpm package:win:arm64` |
+| Windows | x64 | `windows-2025` | `pnpm package:win:x64` |
+| Linux | x64 | `ubuntu-24.04` | `pnpm package:linux` |
+
 Run **Package Desktop Installers** manually from GitHub Actions. Its optional `harness_version` input accepts an official npm version or tag and defaults to `latest`.
 
 ## Troubleshooting
-
-### `Electron uninstall` or a missing Electron binary
-
-Electron could not download its local binary. From the repository root:
-
-```sh
-cd "$(git rev-parse --show-toplevel)"
-ELECTRON_GET_USE_PROXY=true pnpm exec install-electron --no
-pnpm dev
-```
-
-When a network proxy is required, also set `HTTP_PROXY` and `HTTPS_PROXY`.
 
 ### The official Web UI starts but model requests fail
 
