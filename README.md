@@ -1,5 +1,7 @@
 # DeepSeek Harness Desktop
 
+[English](README.en.md) | 中文
+
 `DeepSeek Harness Desktop` 是给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 准备的 Electron 桌面工作台。
 
 当前仓库是 Electron 外壳：负责窗口、安全隔离、工作区选择和本地进程管理。官方 DeepSeek Harness 位于独立的 `DeepSeek-Harness-Dist/` 目录中，用户可以自行构建、更新或整个替换该目录。
