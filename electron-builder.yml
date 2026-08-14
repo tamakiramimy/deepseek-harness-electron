@@ -6,9 +6,18 @@ directories:
 files:
   - out/**
   - package.json
-asar: true
-asarUnpack:
-  - resources/harness/**
+  - "!node_modules/**"
+extraResources:
+  - from: DeepSeek-Harness-Dist
+    to: DeepSeek-Harness-Dist
+    filter:
+      - "**/*"
+  - from: DeepSeek-Harness-Dist/node_modules
+    to: DeepSeek-Harness-Dist/node_modules
+    filter:
+      - "**/*"
+asar:
+  smartUnpack: true
 mac:
   category: public.app-category.developer-tools
   target:

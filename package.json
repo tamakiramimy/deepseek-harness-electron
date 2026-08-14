@@ -2,6 +2,8 @@
   "name": "deepseek-harness-electron",
   "version": "0.1.0",
   "description": "A secure cross-platform desktop workbench for DeepSeek Harness.",
+  "author": "DeepSeek Harness Desktop contributors",
+  "copyright": "Copyright © 2026 DeepSeek Harness Desktop contributors",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -16,10 +18,14 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
-    "package": "pnpm build && electron-builder --config electron-builder.yml",
-    "package:mac": "pnpm build && electron-builder --mac --config electron-builder.yml",
-    "package:win": "pnpm build && electron-builder --win --config electron-builder.yml",
-    "package:linux": "pnpm build && electron-builder --linux --config electron-builder.yml"
+    "harness:dist:init": "node scripts/harness-dist.mjs --init",
+    "harness:dist:install": "node scripts/harness-dist.mjs --install",
+    "harness:dist:validate": "node scripts/harness-dist.mjs --validate",
+    "package": "pnpm build && pnpm harness:dist:validate && electron-builder --config electron-builder.yml",
+    "package:mac": "pnpm build && pnpm harness:dist:validate && electron-builder --mac --config electron-builder.yml",
+    "package:mac:arm64": "pnpm build && pnpm harness:dist:validate && electron-builder --mac dmg --arm64 --config electron-builder.yml",
+    "package:win": "pnpm build && pnpm harness:dist:validate && electron-builder --win --config electron-builder.yml",
+    "package:linux": "pnpm build && pnpm harness:dist:validate && electron-builder --linux --config electron-builder.yml"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

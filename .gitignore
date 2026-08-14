@@ -3,6 +3,10 @@ out/
 dist/
 release/
 coverage/
+resources/harness/
+DeepSeek-Harness-Dist/
+harness-home/
 .DS_Store
 *.log
 .env
+Temp*

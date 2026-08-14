@@ -6,6 +6,8 @@ export interface HostStatus {
   readonly state: HostState
   readonly detail: string
   readonly startedAt?: number
+  /** Loopback URL of the running official Harness Web UI. */
+  readonly url?: string
 }
 
 export interface WorkspaceSummary {
