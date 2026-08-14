@@ -8,6 +8,8 @@
 
 启动应用后，Electron Utility Host 从该目录启动官方 Harness Web UI；服务绑定随机 loopback 端口，并嵌入 Electron 窗口中央区域。Electron 项目本身不锁定 `@deepseek-ai/dsh` 的版本。
 
+发布时，四个 Electron Shell 安装包均不包含官方 Harness。官方 Runtime 作为第五个独立发布物 `DeepSeek-Harness-Dist-<version>.zip` 提供，其中包含四个平台架构的 Runtime 子目录。
+
 ## 当前状态
 
 | 能力 | 当前状态 |
@@ -15,7 +17,7 @@
 | 官方 DeepSeek Harness Web UI | 由 Electron Utility Host 自动启动并嵌入中央区域 |
 | Electron 桌面壳 | 可启动、选择并记住工作区、显示 Host 状态 |
 | Electron 内嵌官方会话/Agent | 可在中央官方 Harness 面板中配置模型、创建会话和运行 Agent |
-| Runtime | 从可替换的 `DeepSeek-Harness-Dist/` 加载，每次启动使用独立 `DSH_HOME` |
+| Runtime | 从独立、可替换的 `DeepSeek-Harness-Dist/` Bundle 加载；Shell 安装包不内嵌官方 Harness |
 
 ## 前置条件
 
@@ -51,14 +53,14 @@ pnpm install
 
 ### 创建默认官方 Runtime Dist
 
-首次运行前，创建可替换的 `DeepSeek-Harness-Dist/`：
+本地开发时，先创建当前平台可用的 `DeepSeek-Harness-Dist/`：
 
 ```sh
 pnpm harness:dist:install
 pnpm harness:dist:validate
 ```
 
-默认安装当前 npm registry 的官方 `@deepseek-ai/dsh`。生成后的目录结构如下：
+默认安装当前 npm registry 的官方 `@deepseek-ai/dsh`。该目录只包含当前机器架构的 Runtime，适合本地开发：
 
 ```text
 DeepSeek-Harness-Dist/
@@ -102,6 +104,27 @@ Electron 只要求 Runtime Dist 根目录内有 `runtime-manifest.json`，且其
 	"entry": "node_modules/@deepseek-ai/dsh/lib/bin.js"
 }
 ```
+
+### 使用发布版 Runtime Bundle
+
+GitHub Release 中的第五个产出物是 `DeepSeek-Harness-Dist-<version>.zip`。解压后目录包含统一索引和四个目标平台的完整 Runtime：
+
+```text
+DeepSeek-Harness-Dist/
+	runtime-index.json
+	darwin-arm64/
+	darwin-x64/
+	win32-arm64/
+	win32-x64/
+```
+
+Shell 会根据当前 `process.platform` 和 `process.arch` 自动选择对应子目录。例如 macOS Apple Silicon 选择 `darwin-arm64/`，Windows x64 选择 `win32-x64/`。
+
+每个 Shell 发布包只包含 Electron 代码。安装 Shell 后，下载并解压 Runtime Bundle，然后通过以下任一方式让 Shell 找到 Bundle 根目录：
+
+1. 将 `DeepSeek-Harness-Dist/` 放在 Shell 安装目录旁边。
+2. 将其放入应用用户数据目录下的 `DeepSeek-Harness-Dist/`。
+3. 启动 Shell 时设置 `DEEPSEEK_HARNESS_DIST` 为解压后 Bundle 根目录。
 
 ### 使用其他 npm 版本
 
@@ -147,7 +170,7 @@ pnpm harness:dist:validate
 DEEPSEEK_HARNESS_DIST="<runtime-dist-directory>" pnpm dev
 ```
 
-发行版优先查找该环境变量，其次查找用户数据目录下的 `DeepSeek-Harness-Dist/`，最后使用安装包内置的 `Resources/DeepSeek-Harness-Dist/`。因此用户可在不修改应用包的情况下替换 runtime。
+发行版优先查找该环境变量，其次查找用户数据目录下的 `DeepSeek-Harness-Dist/`，最后查找 Shell 安装目录旁边的同名目录。Shell 安装包本身不包含 Runtime，因此用户可在不修改应用包的情况下替换 Runtime Bundle。
 
 ## 配置模型与工作区
 
@@ -186,25 +209,26 @@ pnpm build
 pnpm test
 ```
 
-生成安装包前必须先有可验证的 `DeepSeek-Harness-Dist/`：
+Shell 安装包只构建 Electron 代码，不会复制本地 `DeepSeek-Harness-Dist/`：
 
 ```sh
-pnpm package:mac
-pnpm package:win
-pnpm package:linux
+pnpm package:mac:arm64
+pnpm package:mac:x64
+pnpm package:win:arm64
+pnpm package:win:x64
 ```
 
-electron-builder 会将 `DeepSeek-Harness-Dist/` 原样复制到安装包的 `Resources/DeepSeek-Harness-Dist/`。跨平台发布应在对应平台的 CI 或构建机上完成签名与打包；不要把本机 macOS 构建产物当作 Windows 或 Linux 的发布验证。
+跨平台发布应在对应平台的 CI 或构建机上完成签名与打包；不要把本机 macOS 构建产物当作 Windows 发布验证。
 
 ## 原生多平台构建
 
-工作流 [package.yml](.github/workflows/package.yml) 在原生 macOS arm64、Windows x64 和 Linux x64 runner 上分别执行以下步骤：
+工作流 [package.yml](.github/workflows/package.yml) 在四个原生 macOS/Windows runner 上分别构建 Shell 和 Runtime，然后汇总 Runtime Bundle：
 
-1. 安装 Electron 外壳依赖。
-2. 在该平台创建 `DeepSeek-Harness-Dist`，因此原生模块与目标平台匹配。
-3. 启动官方 Harness Web UI 进行 loopback smoke test。
-4. 生成对应安装包和 `SHA256SUMS.txt`。
-5. 上传安装包、blockmap 和校验清单为 workflow artifact。
+1. 四个 Shell job 只打包 Electron 安装器。
+2. 四个 Runtime job 分别创建 `DeepSeek-Harness-Dist/<target>/`。
+3. 每个 Runtime job 启动官方 Harness Web UI 进行 loopback smoke test。
+4. 汇总 job 生成一个包含四个 Runtime 子目录的 zip Bundle。
+5. tag 发布时，GitHub Release 仅含四个 Shell 安装器和这一个 Runtime Bundle，共五个产出物。
 
 当前架构矩阵如下：
 
@@ -214,9 +238,8 @@ electron-builder 会将 `DeepSeek-Harness-Dist/` 原样复制到安装包的 `Re
 | macOS | x64 | `macos-15-intel` | `pnpm package:mac:x64` |
 | Windows | arm64 | `windows-11-arm` | `pnpm package:win:arm64` |
 | Windows | x64 | `windows-2025` | `pnpm package:win:x64` |
-| Linux | x64 | `ubuntu-24.04` | `pnpm package:linux` |
 
-从 GitHub Actions 的 **Package Desktop Installers** 工作流手动触发构建。可选的 `harness_version` 输入用于选择官方 npm 版本或 tag；留空时使用 `latest`。
+从 GitHub Actions 的 **Package Desktop Release** 工作流手动触发构建。可选的 `harness_version` 输入用于选择官方 npm 版本或 tag；留空时使用 `latest`。
 
 ## 常见问题
 
@@ -238,7 +261,7 @@ pnpm harness:dist:validate
 pnpm harness:dist:install
 ```
 
-检查 `runtime-manifest.json` 的 `entry` 必须是目录内相对路径，且指向实际存在的官方 CLI 文件。
+直接 Runtime 的 `runtime-manifest.json` 或 Bundle 的 `runtime-index.json` 必须存在。所有 `entry` 和子目录路径都必须是 Runtime 根目录内的相对路径。
 
 ### 窗口只有深色空白背景
 

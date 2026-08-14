@@ -2,21 +2,17 @@ import { spawn } from 'node:child_process'
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join, relative, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const projectRoot = resolve(join(fileURLToPath(import.meta.url), '..', '..'))
 const distRoot = resolve(process.env.DEEPSEEK_HARNESS_DIST ?? join(projectRoot, 'DeepSeek-Harness-Dist'))
-const manifest = JSON.parse(await readFile(join(distRoot, 'runtime-manifest.json'), 'utf8'))
+const runtimeRoot = await resolveRuntimeRoot(distRoot)
+const manifest = JSON.parse(await readFile(join(runtimeRoot, 'runtime-manifest.json'), 'utf8'))
 
-if (manifest.format !== 1 || typeof manifest.entry !== 'string') {
-  throw new Error('Runtime manifest must have format 1 and a string entry.')
-}
-const cliPath = resolve(distRoot, manifest.entry)
-const outsideRoot = relative(distRoot, cliPath)
-if (outsideRoot === '' || outsideRoot.startsWith('..') || outsideRoot.includes('../')) {
-  throw new Error('Runtime manifest entry must remain inside DeepSeek-Harness-Dist.')
-}
+if (manifest.format !== 1 || typeof manifest.entry !== 'string') throw new Error('Runtime manifest must have format 1 and a string entry.')
+const cliPath = resolve(runtimeRoot, manifest.entry)
+assertPathInside(runtimeRoot, cliPath, 'Runtime manifest entry')
 await access(cliPath)
 
 const port = await findAvailablePort()
@@ -34,6 +30,40 @@ try {
 } finally {
   child.kill()
   await rm(harnessHome, { recursive: true, force: true })
+}
+
+async function resolveRuntimeRoot(root) {
+  if (await pathExists(join(root, 'runtime-manifest.json'))) return root
+  const indexPath = join(root, 'runtime-index.json')
+  if (!await pathExists(indexPath)) throw new Error('Runtime bundle has no runtime-manifest.json or runtime-index.json.')
+  const index = JSON.parse(await readFile(indexPath, 'utf8'))
+  if (index.format !== 1 || typeof index.runtimes !== 'object' || index.runtimes === null || Array.isArray(index.runtimes)) {
+    throw new Error('Runtime bundle index is invalid.')
+  }
+  const target = `${process.platform}-${process.arch}`
+  const directory = index.runtimes[target]
+  if (typeof directory !== 'string' || directory.length === 0) {
+    throw new Error(`Runtime bundle has no entry for ${target}.`)
+  }
+  const runtimeRoot = resolve(root, directory)
+  assertPathInside(root, runtimeRoot, `Runtime bundle entry ${target}`)
+  return runtimeRoot
+}
+
+function assertPathInside(root, candidate, label) {
+  const relativePath = relative(root, candidate)
+  if (relativePath === '' || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    throw new Error(`${label} must remain inside DeepSeek-Harness-Dist.`)
+  }
+}
+
+async function pathExists(path) {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function findAvailablePort() {

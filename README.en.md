@@ -8,6 +8,8 @@ This repository owns the window, security isolation, local process lifecycle, an
 
 At startup, an Electron Utility Host launches the official Harness Web UI from that directory on a random loopback port and embeds it in the desktop window. The Electron project does not pin an `@deepseek-ai/dsh` version.
 
+At release time, the four Electron Shell installers do not contain official Harness. Official Runtime is the fifth independent release asset, `DeepSeek-Harness-Dist-<version>.zip`, which contains Runtime subdirectories for all four supported platform architectures.
+
 ## Status
 
 | Capability | Current behavior |
@@ -15,7 +17,7 @@ At startup, an Electron Utility Host launches the official Harness Web UI from t
 | Official DeepSeek Harness Web UI | Started by the Electron Utility Host and embedded in the main window |
 | Electron shell | Starts safely, manages the local process, and reports runtime status |
 | Chat and agent workflow | Use the official Harness page in the central window area |
-| Runtime | Loaded from a replaceable `DeepSeek-Harness-Dist/` directory with an isolated `DSH_HOME` |
+| Runtime | Loaded from an independent, replaceable `DeepSeek-Harness-Dist/` Bundle; Shell installers do not embed official Harness |
 
 ## Prerequisites
 
@@ -51,14 +53,14 @@ pnpm install
 
 ### Create the default Harness Runtime Dist
 
-Before first launch, create the replaceable `DeepSeek-Harness-Dist/` directory:
+For local development, create a `DeepSeek-Harness-Dist/` directory for the current platform:
 
 ```sh
 pnpm harness:dist:install
 pnpm harness:dist:validate
 ```
 
-The default setup installs the current npm-registry version of official `@deepseek-ai/dsh`. The resulting layout contains a complete runtime, not only static Web UI assets:
+The default setup installs the current npm-registry version of official `@deepseek-ai/dsh`. This direct directory serves the current machine architecture and is intended for local development:
 
 ```text
 DeepSeek-Harness-Dist/
@@ -102,6 +104,27 @@ Electron requires a `runtime-manifest.json` at the Runtime Dist root. Its `entry
   "entry": "node_modules/@deepseek-ai/dsh/lib/bin.js"
 }
 ```
+
+### Use the release Runtime Bundle
+
+The fifth GitHub Release asset is `DeepSeek-Harness-Dist-<version>.zip`. Once extracted, it contains a shared index and four complete target runtimes:
+
+```text
+DeepSeek-Harness-Dist/
+  runtime-index.json
+  darwin-arm64/
+  darwin-x64/
+  win32-arm64/
+  win32-x64/
+```
+
+The Shell automatically selects the matching child directory from `process.platform` and `process.arch`. For example, macOS Apple Silicon selects `darwin-arm64/`, while Windows x64 selects `win32-x64/`.
+
+Each Shell release contains only Electron code. After installing a Shell, download and extract the Runtime Bundle, then make its root discoverable in one of these ways:
+
+1. Place `DeepSeek-Harness-Dist/` next to the Shell installation.
+2. Place it in the application user-data directory as `DeepSeek-Harness-Dist/`.
+3. Set `DEEPSEEK_HARNESS_DIST` to the extracted Bundle root before launching the Shell.
 
 ### Use another npm version
 
@@ -151,9 +174,9 @@ The lookup order is:
 
 1. `DEEPSEEK_HARNESS_DIST`.
 2. `DeepSeek-Harness-Dist/` under the application user data directory.
-3. The development repository's `DeepSeek-Harness-Dist/`, or packaged `Resources/DeepSeek-Harness-Dist/`.
+3. A `DeepSeek-Harness-Dist/` directory beside the packaged Shell, or the development repository's local directory.
 
-This lets users replace a packaged runtime without changing the Electron application bundle.
+Shell installers do not include Runtime, so this lets users replace a Runtime Bundle without changing the Electron application bundle.
 
 ## Configure a Model and Workspace
 
@@ -194,25 +217,26 @@ pnpm harness:dist:validate
 pnpm harness:dist:smoke
 ```
 
-Create installers only after the Runtime Dist validates:
+Shell installers build only Electron code and do not copy the local `DeepSeek-Harness-Dist/`:
 
 ```sh
-pnpm package:mac
-pnpm package:win
-pnpm package:linux
+pnpm package:mac:arm64
+pnpm package:mac:x64
+pnpm package:win:arm64
+pnpm package:win:x64
 ```
 
-electron-builder copies the complete Runtime Dist to `Resources/DeepSeek-Harness-Dist/`. Build platform-specific installers on matching native platforms; do not use a macOS runtime in Windows or Linux releases.
+Build platform-specific installers on matching native platforms; do not use a macOS Runtime in Windows releases.
 
 ## Native Multi-Platform Builds
 
-The [Package Desktop Installers workflow](.github/workflows/package.yml) runs on native macOS arm64, Windows x64, and Linux x64 runners. Each job:
+The [Package Desktop Release workflow](.github/workflows/package.yml) runs Shell and Runtime jobs on four native macOS/Windows runners, then assembles one Runtime Bundle:
 
-1. Installs Electron shell dependencies.
-2. Creates a target-platform `DeepSeek-Harness-Dist`.
-3. Starts official Harness and performs a loopback smoke test.
-4. Builds the target installer and `SHA256SUMS.txt`.
-5. Uploads installers, blockmaps, and checksums as workflow artifacts.
+1. Four Shell jobs package Electron installers only.
+2. Four Runtime jobs create `DeepSeek-Harness-Dist/<target>/` directories.
+3. Each Runtime job starts official Harness and runs a loopback smoke test.
+4. An assembly job creates one zip containing all four Runtime directories.
+5. On a tag, the GitHub Release contains exactly four Shell installers and one Runtime Bundle.
 
 The current architecture matrix is:
 
@@ -222,9 +246,8 @@ The current architecture matrix is:
 | macOS | x64 | `macos-15-intel` | `pnpm package:mac:x64` |
 | Windows | arm64 | `windows-11-arm` | `pnpm package:win:arm64` |
 | Windows | x64 | `windows-2025` | `pnpm package:win:x64` |
-| Linux | x64 | `ubuntu-24.04` | `pnpm package:linux` |
 
-Run **Package Desktop Installers** manually from GitHub Actions. Its optional `harness_version` input accepts an official npm version or tag and defaults to `latest`.
+Run **Package Desktop Release** manually from GitHub Actions. Its optional `harness_version` input accepts an official npm version or tag and defaults to `latest`.
 
 ## Troubleshooting
 
@@ -246,7 +269,7 @@ If it does not exist, recreate it:
 pnpm harness:dist:install
 ```
 
-The `runtime-manifest.json` entry must be a relative path inside `DeepSeek-Harness-Dist/` and must point to an existing official CLI file.
+A direct Runtime must contain `runtime-manifest.json`; a Bundle must contain `runtime-index.json`. Every entry and child directory must remain relative to the Runtime root.
 
 ### The window is only a dark blank surface
 

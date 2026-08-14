@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, readFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
-import { join, relative, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 
 const PROTOCOL_VERSION = 1
 const STARTUP_TIMEOUT_MS = 20_000
@@ -69,19 +69,56 @@ async function startHarness(harnessHome: string, runtimeRoot: string): Promise<v
 }
 
 async function resolveDshCli(runtimeRoot: string): Promise<string> {
-  const root = resolve(runtimeRoot)
+  const root = await resolveRuntimeRoot(resolve(runtimeRoot))
   const manifestPath = join(root, 'runtime-manifest.json')
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as { format?: unknown; entry?: unknown }
   if (manifest.format !== 1 || typeof manifest.entry !== 'string' || manifest.entry.length === 0) {
     throw new Error('DeepSeek-Harness-Dist has an invalid runtime-manifest.json.')
   }
   const cliPath = resolve(root, manifest.entry)
-  const outsideRoot = relative(root, cliPath)
-  if (outsideRoot === '' || outsideRoot.startsWith('..') || outsideRoot.includes('../')) {
-    throw new Error('DeepSeek-Harness-Dist entry must remain inside its runtime directory.')
-  }
+  assertPathInsideRuntime(root, cliPath, 'Runtime manifest entry')
   await access(cliPath)
   return cliPath
+}
+
+async function resolveRuntimeRoot(root: string): Promise<string> {
+  if (await pathExists(join(root, 'runtime-manifest.json'))) return root
+
+  const indexPath = join(root, 'runtime-index.json')
+  if (!await pathExists(indexPath)) {
+    throw new Error('DeepSeek-Harness-Dist must contain runtime-manifest.json or runtime-index.json.')
+  }
+  const index = JSON.parse(await readFile(indexPath, 'utf8')) as { format?: unknown; runtimes?: unknown }
+  if (index.format !== 1 || typeof index.runtimes !== 'object' || index.runtimes === null || Array.isArray(index.runtimes)) {
+    throw new Error('DeepSeek-Harness-Dist has an invalid runtime-index.json.')
+  }
+  const target = `${process.platform}-${process.arch}`
+  const runtimeDirectory = (index.runtimes as Record<string, unknown>)[target]
+  if (typeof runtimeDirectory !== 'string' || runtimeDirectory.length === 0) {
+    throw new Error(`DeepSeek-Harness-Dist does not include a runtime for ${target}.`)
+  }
+  const selectedRoot = resolve(root, runtimeDirectory)
+  assertPathInsideRuntime(root, selectedRoot, 'Runtime bundle target')
+  if (!await pathExists(join(selectedRoot, 'runtime-manifest.json'))) {
+    throw new Error(`DeepSeek-Harness-Dist runtime ${target} has no runtime-manifest.json.`)
+  }
+  return selectedRoot
+}
+
+function assertPathInsideRuntime(root: string, candidate: string, label: string): void {
+  const relativePath = relative(root, candidate)
+  if (relativePath === '' || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    throw new Error(`${label} must remain inside DeepSeek-Harness-Dist.`)
+  }
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function findAvailablePort(): Promise<number> {

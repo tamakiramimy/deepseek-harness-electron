@@ -1,10 +1,10 @@
-name: Package Desktop Installers
+name: Package Desktop Release
 
 on:
   workflow_dispatch:
     inputs:
       harness_version:
-        description: Official @deepseek-ai/dsh version or npm tag for DeepSeek-Harness-Dist
+        description: Official @deepseek-ai/dsh version or npm tag for the Runtime Bundle
         required: false
         default: latest
         type: string
@@ -16,8 +16,8 @@ permissions:
   contents: read
 
 jobs:
-  package:
-    name: ${{ matrix.name }}
+  shell:
+    name: Shell ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -26,23 +26,27 @@ jobs:
           - name: macOS arm64
             runner: macos-14
             command: package:mac:arm64
-            artifact: macos-arm64
+            target: darwin-arm64
+            artifact: shell-darwin-arm64
+            installer_glob: release/*.dmg
           - name: macOS x64
             runner: macos-15-intel
             command: package:mac:x64
-            artifact: macos-x64
-          - name: Windows x64
-            runner: windows-2025
-            command: package:win:x64
-            artifact: windows-x64
+            target: darwin-x64
+            artifact: shell-darwin-x64
+            installer_glob: release/*.dmg
           - name: Windows arm64
             runner: windows-11-arm
             command: package:win:arm64
-            artifact: windows-arm64
-          - name: Linux x64
-            runner: ubuntu-24.04
-            command: package:linux
-            artifact: linux-x64
+            target: win32-arm64
+            artifact: shell-win32-arm64
+            installer_glob: release/*.exe
+          - name: Windows x64
+            runner: windows-2025
+            command: package:win:x64
+            target: win32-x64
+            artifact: shell-win32-x64
+            installer_glob: release/*.exe
 
     steps:
       - uses: actions/checkout@v6
@@ -53,30 +57,150 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - name: Install Electron shell dependencies
+      - name: Install Shell dependencies
         run: pnpm install --prod=false --frozen-lockfile
-      - name: Create and smoke test external Harness runtime
+      - name: Build Electron Shell
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: pnpm ${{ matrix.command }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.installer_glob }}
+          if-no-files-found: error
+          retention-days: 30
+
+  runtime:
+    name: Runtime ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS arm64
+            runner: macos-14
+            target: darwin-arm64
+          - name: macOS x64
+            runner: macos-15-intel
+            target: darwin-x64
+          - name: Windows arm64
+            runner: windows-11-arm
+            target: win32-arm64
+          - name: Windows x64
+            runner: windows-2025
+            target: win32-x64
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.15.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install Runtime build tools
+        run: pnpm install --prod=false --frozen-lockfile
+      - name: Create and smoke test platform Runtime Dist
         env:
           DEEPSEEK_HARNESS_VERSION: ${{ inputs.harness_version || 'latest' }}
+          DEEPSEEK_HARNESS_DIST: runtime-output/DeepSeek-Harness-Dist/${{ matrix.target }}
+          DEEPSEEK_HARNESS_TARGET: ${{ matrix.target }}
         run: |
           pnpm harness:dist:install
           pnpm harness:dist:validate
           pnpm harness:dist:smoke
-      - name: Build installer
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: pnpm ${{ matrix.command }}
-      - name: Write checksums
-        run: pnpm release:manifest
       - uses: actions/upload-artifact@v7
         with:
-          name: DeepSeek-Harness-Desktop-${{ matrix.artifact }}
-          path: |
-            release/*.dmg
-            release/*.AppImage
-            release/*.deb
-            release/*.exe
-            release/*.blockmap
-            release/SHA256SUMS.txt
+          name: runtime-${{ matrix.target }}
+          path: runtime-output/DeepSeek-Harness-Dist/${{ matrix.target }}
           if-no-files-found: error
           retention-days: 30
+
+  assemble-runtime:
+    name: Assemble Runtime Bundle
+    needs: runtime
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.15.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install bundle assembly tools
+        run: pnpm install --prod=false --frozen-lockfile
+      - uses: actions/download-artifact@v7
+        with:
+          name: runtime-darwin-arm64
+          path: runtime-output/DeepSeek-Harness-Dist/darwin-arm64
+      - uses: actions/download-artifact@v7
+        with:
+          name: runtime-darwin-x64
+          path: runtime-output/DeepSeek-Harness-Dist/darwin-x64
+      - uses: actions/download-artifact@v7
+        with:
+          name: runtime-win32-arm64
+          path: runtime-output/DeepSeek-Harness-Dist/win32-arm64
+      - uses: actions/download-artifact@v7
+        with:
+          name: runtime-win32-x64
+          path: runtime-output/DeepSeek-Harness-Dist/win32-x64
+      - name: Add Runtime Bundle README
+        run: cp DeepSeek-Harness-Dist.example/README.md runtime-output/DeepSeek-Harness-Dist/README.md
+      - name: Write and validate Runtime Bundle index
+        env:
+          DEEPSEEK_HARNESS_DIST: runtime-output/DeepSeek-Harness-Dist
+        run: |
+          pnpm harness:dist:bundle-index
+          pnpm harness:dist:bundle-validate
+      - name: Archive Runtime Bundle
+        shell: bash
+        run: |
+          mkdir -p release
+          runtime_label="${GITHUB_REF_NAME:-manual}"
+          (cd runtime-output && zip -r "../release/DeepSeek-Harness-Dist-${runtime_label}.zip" DeepSeek-Harness-Dist)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: runtime-bundle
+          path: release/DeepSeek-Harness-Dist-*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-release:
+    name: Publish GitHub Release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs:
+      - shell
+      - assemble-runtime
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: shell-darwin-arm64
+          path: release-assets
+      - uses: actions/download-artifact@v7
+        with:
+          name: shell-darwin-x64
+          path: release-assets
+      - uses: actions/download-artifact@v7
+        with:
+          name: shell-win32-arm64
+          path: release-assets
+      - uses: actions/download-artifact@v7
+        with:
+          name: shell-win32-x64
+          path: release-assets
+      - uses: actions/download-artifact@v7
+        with:
+          name: runtime-bundle
+          path: release-assets
+      - name: Create release with four Shell installers and one Runtime Bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release create "${GITHUB_REF_NAME}" release-assets/* --generate-notes

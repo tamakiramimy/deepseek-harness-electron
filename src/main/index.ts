@@ -1,6 +1,6 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { existsSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { DESKTOP_API_VERSION } from '../shared/contracts.js'
 import { DesktopBroker } from './desktop-broker.js'
 import { DesktopStore } from './desktop-store.js'
@@ -101,10 +101,17 @@ function resolveHarnessRuntimeRoot(): string {
   const candidates = [
     configured === undefined ? undefined : resolve(configured),
     join(app.getPath('userData'), 'DeepSeek-Harness-Dist'),
-    ...(app.isPackaged ? [join(process.resourcesPath, 'DeepSeek-Harness-Dist')] : []),
-    ...(app.isPackaged ? [] : [join(app.getAppPath(), 'DeepSeek-Harness-Dist')]),
+    ...(app.isPackaged ? packagedRuntimeCandidates() : [join(app.getAppPath(), 'DeepSeek-Harness-Dist')]),
   ]
   return candidates.find((candidate): candidate is string => candidate !== undefined && existsSync(candidate))
     ?? candidates.find((candidate): candidate is string => candidate !== undefined)
     ?? join(app.getAppPath(), 'DeepSeek-Harness-Dist')
+}
+
+function packagedRuntimeCandidates(): string[] {
+  const candidates = [join(dirname(process.execPath), 'DeepSeek-Harness-Dist')]
+  if (process.platform === 'darwin') {
+    candidates.push(join(dirname(dirname(dirname(process.resourcesPath))), 'DeepSeek-Harness-Dist'))
+  }
+  return candidates
 }
