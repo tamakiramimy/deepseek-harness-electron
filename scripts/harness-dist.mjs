@@ -145,9 +145,12 @@ async function pathExists(path) {
 }
 
 function run(command, args, cwd) {
-  const executable = process.platform === 'win32' && command === 'npm' ? 'npm.cmd' : command
+  const executable = process.platform === 'win32' ? (process.env.ComSpec ?? 'cmd.exe') : command
+  const executableArgs = process.platform === 'win32'
+    ? ['/d', '/s', '/c', [command, ...args].join(' ')]
+    : args
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(executable, args, { cwd, env: process.env, stdio: 'inherit' })
+    const child = spawn(executable, executableArgs, { cwd, env: process.env, stdio: 'inherit' })
     child.once('error', reject)
     child.once('exit', (code) => code === 0 ? resolvePromise() : reject(new Error(`${executable} exited with code ${String(code)}.`)))
   })

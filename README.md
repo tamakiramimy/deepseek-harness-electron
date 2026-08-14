@@ -230,6 +230,8 @@ pnpm package:win:x64
 4. 汇总 job 生成一个包含四个 Runtime 子目录的 zip Bundle。
 5. tag 发布时，GitHub Release 仅含四个 Shell 安装器和这一个 Runtime Bundle，共五个产出物。
 
+Shell 构建不自动发布；只有最终的 Release job 使用 GitHub 提供的 `GITHUB_TOKEN` 创建或更新 Release。
+
 当前架构矩阵如下：
 
 | 平台 | 架构 | GitHub-hosted runner | 打包命令 |

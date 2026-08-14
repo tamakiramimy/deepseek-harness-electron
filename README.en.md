@@ -238,6 +238,8 @@ The [Package Desktop Release workflow](.github/workflows/package.yml) runs Shell
 4. An assembly job creates one zip containing all four Runtime directories.
 5. On a tag, the GitHub Release contains exactly four Shell installers and one Runtime Bundle.
 
+Shell builds never publish automatically. Only the final Release job uses the GitHub-provided `GITHUB_TOKEN` to create or update the Release.
+
 The current architecture matrix is:
 
 | Platform | Architecture | GitHub-hosted runner | Package command |
