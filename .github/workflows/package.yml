@@ -107,6 +107,7 @@ jobs:
           DEEPSEEK_HARNESS_VERSION: ${{ inputs.harness_version || 'latest' }}
           DEEPSEEK_HARNESS_DIST: runtime-output/DeepSeek-Harness-Dist/${{ matrix.target }}
           DEEPSEEK_HARNESS_TARGET: ${{ matrix.target }}
+          NODE_OPTIONS: '--max-old-space-size=8192'
         run: |
           pnpm harness:dist:install
           pnpm harness:dist:validate

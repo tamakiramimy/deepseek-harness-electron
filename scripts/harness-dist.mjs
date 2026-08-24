@@ -16,7 +16,7 @@ switch (action) {
     break
   case '--install':
     await initializeDist()
-    await run('npm', ['install', '--omit=dev', '--ignore-scripts=false'], distRoot)
+    await run('npm', ['install', '--omit=dev', '--ignore-scripts=false', '--no-audit', '--no-fund'], distRoot)
     await writeManifest(runtimeTarget)
     break
   case '--validate':
