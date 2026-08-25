@@ -53,17 +53,18 @@
 
 | 组件 | 版本 |
 | --- | --- |
-| 桌面外壳 | v0.1.4 |
+| 桌面外壳 | v0.1.5 |
 | DeepSeek Harness Runtime | `@deepseek-ai/dsh` v0.1.1-rc.2 |
 
 ## 更新日志
 
-**v0.1.4**
+**v0.1.5**
 
 - 新增 Electron 桌面代理配置功能（HTTP / HTTPS / NO_PROXY），配置后自动重启 Harness
 - 支持最新 `deepseek-v4-flash-vision-exp` 多模态视觉模型
 - 升级内置 DeepSeek Harness Runtime 至 `@deepseek-ai/dsh` v0.1.1-rc.2
 - 修复启动时额外弹出浏览器窗口的问题（增加 `--no-open` 参数）
+- GitHub Actions 标签发布固定使用 `@deepseek-ai/dsh` v0.1.1-rc.2，并在 Runtime manifest 记录实际安装版本
 
 ## 本地开发
 

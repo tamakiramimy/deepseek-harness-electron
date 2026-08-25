@@ -55,11 +55,29 @@ async function initializeDist() {
 }
 
 async function writeManifest(target = undefined) {
+  const runtimeVersion = await readInstalledRuntimeVersion()
   await writeFile(manifestPath, JSON.stringify({
     format: 1,
     entry: 'node_modules/@deepseek-ai/dsh/lib/bin.js',
+    ...(runtimeVersion === undefined ? {} : { runtimeVersion }),
     ...(target === undefined ? {} : { target }),
   }, null, 2).concat('\n'), 'utf8')
+  if (runtimeVersion !== undefined) {
+    console.log(`DeepSeek Harness runtime version: ${runtimeVersion}`)
+  }
+}
+
+async function readInstalledRuntimeVersion() {
+  try {
+    const runtimePackage = JSON.parse(await readFile(join(distRoot, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), 'utf8'))
+    if (typeof runtimePackage.version !== 'string' || runtimePackage.version.length === 0) {
+      throw new Error('Installed @deepseek-ai/dsh package has an invalid version.')
+    }
+    return runtimePackage.version
+  } catch (error) {
+    if (error?.code === 'ENOENT') return undefined
+    throw error
+  }
 }
 
 async function validateDist() {
@@ -125,6 +143,12 @@ async function validateRuntimeDirectory(runtimeRoot, expectedTarget = undefined)
   const entry = resolve(runtimeRoot, manifest.entry)
   assertPathInside(runtimeRoot, entry, 'Runtime manifest entry')
   await access(entry)
+  if (manifest.runtimeVersion !== undefined) {
+    const runtimePackage = JSON.parse(await readFile(join(runtimeRoot, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), 'utf8'))
+    if (manifest.runtimeVersion !== runtimePackage.version) {
+      throw new Error(`Runtime version mismatch: expected ${manifest.runtimeVersion}, found ${runtimePackage.version}.`)
+    }
+  }
   return entry
 }
 

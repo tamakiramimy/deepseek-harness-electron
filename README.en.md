@@ -53,17 +53,18 @@ Supports `deepseek-v4-flash-vision-exp` and other vision models. Upload images d
 
 | Component | Version |
 | --- | --- |
-| Desktop Shell | v0.1.4 |
+| Desktop Shell | v0.1.5 |
 | DeepSeek Harness Runtime | `@deepseek-ai/dsh` v0.1.1-rc.2 |
 
 ## Changelog
 
-**v0.1.4**
+**v0.1.5**
 
 - Added Electron proxy configuration (HTTP / HTTPS / NO_PROXY) with automatic Harness restart on save
 - Support for `deepseek-v4-flash-vision-exp` multimodal vision model
 - Upgraded DeepSeek Harness Runtime to `@deepseek-ai/dsh` v0.1.1-rc.2
 - Fixed extra browser window being opened on startup (added `--no-open` flag)
+- GitHub Actions tag releases now pin `@deepseek-ai/dsh` to v0.1.1-rc.2 and record the installed version in the Runtime manifest
 
 ## Local Development
 

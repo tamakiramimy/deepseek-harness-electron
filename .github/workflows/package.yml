@@ -104,7 +104,7 @@ jobs:
         run: pnpm install --prod=false --frozen-lockfile
       - name: Create and smoke test platform Runtime Dist
         env:
-          DEEPSEEK_HARNESS_VERSION: ${{ inputs.harness_version || 'latest' }}
+          DEEPSEEK_HARNESS_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.harness_version || '0.1.1-rc.2' }}
           DEEPSEEK_HARNESS_DIST: runtime-output/DeepSeek-Harness-Dist/${{ matrix.target }}
           DEEPSEEK_HARNESS_TARGET: ${{ matrix.target }}
           NODE_OPTIONS: '--max-old-space-size=8192'
