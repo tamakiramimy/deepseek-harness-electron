@@ -53,12 +53,12 @@ Supports `deepseek-v4-flash-vision-exp` and other vision models. Upload images d
 
 | Component | Version |
 | --- | --- |
-| Desktop Shell | v0.1.3 |
+| Desktop Shell | v0.1.4 |
 | DeepSeek Harness Runtime | `@deepseek-ai/dsh` v0.1.1-rc.2 |
 
 ## Changelog
 
-**v0.1.3**
+**v0.1.4**
 
 - Added Electron proxy configuration (HTTP / HTTPS / NO_PROXY) with automatic Harness restart on save
 - Support for `deepseek-v4-flash-vision-exp` multimodal vision model
@@ -122,7 +122,7 @@ pnpm package:win:x64
 
 The [package.yml](.github/workflows/package.yml) GitHub Actions workflow builds Shell installers and a Runtime Bundle for all four platforms.
 
-- **Manual trigger**: select `Package Desktop Release` from the Actions tab; optionally specify `harness_version` (defaults to `latest`, currently `0.1.1-rc.2`)
+- **Manual trigger**: select `Package Desktop Release` from the Actions tab; optionally specify `harness_version` (defaults to `0.1.1-rc.2`)
 - **Auto trigger**: pushing a `v*` tag automatically builds and publishes a Release
 
 The Runtime is built from the npm registry (`@deepseek-ai/dsh`), independent of the deepseek-harness source repository.
