@@ -78,12 +78,11 @@ app.whenReady().then(async () => {
   })
   const store = new DesktopStore(app.getPath('userData'))
   await store.load()
+  const harnessHome = join(app.getPath('userData'), 'harness')
+  const runtimeRoot = resolveHarnessRuntimeRoot()
   mainWindow = createWindow()
-  registerDesktopIpc(mainWindow, new DesktopBroker(), store, supervisor)
-  await supervisor.start(
-    join(app.getPath('userData'), 'harness'),
-    resolveHarnessRuntimeRoot(),
-  )
+  registerDesktopIpc(mainWindow, new DesktopBroker(), store, supervisor, harnessHome, runtimeRoot)
+  await supervisor.start(harnessHome, runtimeRoot, store.proxy())
   void DESKTOP_API_VERSION
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow()

@@ -28,6 +28,8 @@
     "package": "pnpm build && electron-builder --config electron-builder.yml --publish never",
     "package:mac": "pnpm build && electron-builder --mac --config electron-builder.yml --publish never",
     "package:mac:arm64": "pnpm build && electron-builder --mac dmg --arm64 --config electron-builder.yml --publish never",
+    "package:mac:arm64:proxy": "export ELECTRON_GET_USE_PROXY=true HTTP_PROXY=http://hkproxy.mindray.com:8080 HTTPS_PROXY=http://hkproxy.mindray.com:8080 http_proxy=http://hkproxy.mindray.com:8080 https_proxy=http://hkproxy.mindray.com:8080 NO_PROXY=localhost,127.0.0.1,.mindray.com,.cn.mindray.gb no_proxy=localhost,127.0.0.1,.mindray.com,.cn.mindray.gb && pnpm build && electron-builder --mac dmg --arm64 --config electron-builder.yml --publish never",
+    "package:mac:arm64:proxy:runtime": "pnpm package:mac:arm64:proxy && node scripts/symlink-runtime-dist.mjs",
     "package:mac:x64": "pnpm build && electron-builder --mac dmg --x64 --config electron-builder.yml --publish never",
     "package:win": "pnpm build && electron-builder --win --config electron-builder.yml --publish never",
     "package:win:arm64": "pnpm build && electron-builder --win nsis --arm64 --config electron-builder.yml --publish never",

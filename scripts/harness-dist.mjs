@@ -42,7 +42,7 @@ async function initializeDist() {
       private: true,
       type: 'module',
       dependencies: {
-        '@deepseek-ai/dsh': process.env.DEEPSEEK_HARNESS_VERSION ?? 'latest',
+        '@deepseek-ai/dsh': process.env.DEEPSEEK_HARNESS_VERSION ?? '0.1.1-rc.2',
       },
     }, null, 2).concat('\n'), 'utf8')
   }

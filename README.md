@@ -2,205 +2,97 @@
 
 [English](README.en.md) | 中文
 
-`DeepSeek Harness Desktop` 是给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 准备的 Electron 桌面工作台。
+`DeepSeek Harness Desktop` 是给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 准备的 Electron 桌面工作台。将官方 Harness Web UI 嵌入原生桌面窗口，开箱即用。
 
-![DeepSeek Harness Desktop 运行中的界面](docs/images/desktop-running.png)
+## 快速开始
 
-## 立即开始
+从 [Releases](https://github.com/tamakiramimy/deepseek-harness-electron/releases) 下载两个文件：
 
-在 [Releases](https://github.com/tamakiramimy/deepseek-harness-electron/releases) 中选择**同一版本**的两个文件。每个 Release 一共提供五个产物：一个 Runtime Bundle 和四个 Shell 安装包。
+1. **Shell 安装包** — 根据你的设备选择：
 
-| 设备 | 下载的 Shell 安装包 |
+| 设备 | 安装包 |
 | --- | --- |
-| 所有设备 | `DeepSeek-Harness-Dist-<version>.zip` |
 | macOS Apple Silicon | `DeepSeek.Harness.Desktop-<version>-darwin-arm64.dmg` |
 | macOS Intel | `DeepSeek.Harness.Desktop-<version>-darwin-x64.dmg` |
 | Windows ARM | `DeepSeek.Harness.Desktop-<version>-win32-arm64.exe` |
 | Windows x64 | `DeepSeek.Harness.Desktop-<version>-win32-x64.exe` |
 
-1. 下载 Runtime Bundle，再按设备选择一个 Shell 安装包。
-2. 正常安装 Shell；解压 Runtime Bundle，保留解压后的 `DeepSeek-Harness-Dist` 文件夹名称。
-3. 将该文件夹放在应用文件旁边，然后启动应用：
+2. **Runtime Bundle** — 所有平台共用：
+
+   `DeepSeek-Harness-Dist-<version>.zip`
+
+将 Runtime Bundle 解压后，把 `DeepSeek-Harness-Dist` 文件夹放到应用文件旁边，启动应用即可：
 
 ```text
 应用所在目录/
-|- DeepSeek Harness Desktop.app 或 DeepSeek Harness Desktop.exe
-`- DeepSeek-Harness-Dist/
+├── DeepSeek Harness Desktop.app   (或 .exe)
+└── DeepSeek-Harness-Dist/
 ```
 
-Shell 会自动选择当前设备所需的 Runtime，无需额外设置。
+![目录结构](docs/images/directory-structure.png)
 
-## 当前状态
+> Shell 会自动选择当前设备所需的 Runtime，无需额外设置。
 
-| 能力 | 当前状态 |
+## 主要特性
+
+### 内置代理配置
+
+支持在桌面工作台内直接配置 HTTP / HTTPS 代理，无需修改系统设置或环境变量。配置后会自动重启 Harness 运行时使其生效。
+
+![代理配置](docs/images/proxy-settings.png)
+
+### 多模态视觉模型支持
+
+支持 `deepseek-v4-flash-vision-exp` 等视觉模型，可直接在对话中上传图片进行分析。
+
+![视觉模型选择](docs/images/vision-model.png)
+
+![多模态对话](docs/images/vision-chat.png)
+
+### 当前版本
+
+| 组件 | 版本 |
 | --- | --- |
-| 官方 DeepSeek Harness Web UI | 由 Electron Utility Host 自动启动并嵌入中央区域 |
-| Electron 桌面壳 | 可启动、选择并记住工作区、显示 Host 状态 |
-| Electron 内嵌官方会话/Agent | 可在中央官方 Harness 面板中配置模型、创建会话和运行 Agent |
-| Runtime | 从独立、可替换的 `DeepSeek-Harness-Dist/` Bundle 加载；Shell 安装包不内嵌官方 Harness |
+| 桌面外壳 | v0.1.3 |
+| DeepSeek Harness Runtime | `@deepseek-ai/dsh` v0.1.1-rc.2 |
 
-## 前置条件
+## 更新日志
 
-- Node.js `>= 22.19.0`。官方 Harness 当前支持 Node `^22.19.0 || >=24`。
-- Corepack 和 pnpm：官方 Harness 固定使用 pnpm 11；本项目使用 pnpm `11.15.1`。
-- Git。
-- 可选：DeepSeek API Key。没有 Key 也可以启动 Web UI，但不能发起模型请求。
+**v0.1.3**
 
-检查环境：
+- 新增 Electron 桌面代理配置功能（HTTP / HTTPS / NO_PROXY），配置后自动重启 Harness
+- 支持最新 `deepseek-v4-flash-vision-exp` 多模态视觉模型
+- 升级内置 DeepSeek Harness Runtime 至 `@deepseek-ai/dsh` v0.1.1-rc.2
+- 修复启动时额外弹出浏览器窗口的问题（增加 `--no-open` 参数）
+
+## 本地开发
+
+### 前置条件
+
+- Node.js `>= 22.19.0`
+- Corepack 和 pnpm（本项目使用 pnpm `11.15.1`）
 
 ```sh
-node --version
+node --version  # >= 22.19.0
 corepack enable
 pnpm --version
 ```
 
-## 使用约定
-
-除非另有说明，后续命令都在项目根目录执行。若当前位于 Git 工作区的任意子目录，可先运行：
+### 安装与运行
 
 ```sh
-cd "$(git rev-parse --show-toplevel)"
-```
-
-## 一次性安装
-
-### 安装 Electron 桌面项目
-
-```sh
-cd "$(git rev-parse --show-toplevel)"
+# 安装依赖
 pnpm install
-```
 
-### 创建默认官方 Runtime Dist
-
-本地开发时，先创建当前平台可用的 `DeepSeek-Harness-Dist/`：
-
-```sh
+# 创建本地 Runtime Dist
 pnpm harness:dist:install
 pnpm harness:dist:validate
-```
 
-默认安装当前 npm registry 的官方 `@deepseek-ai/dsh`。该目录只包含当前机器架构的 Runtime，适合本地开发：
-
-```text
-DeepSeek-Harness-Dist/
-	runtime-manifest.json
-	package.json
-	package-lock.json
-	node_modules/
-		@deepseek-ai/dsh/lib/bin.js
-		@deepseek-ai/dsh-web-frontend/dist/
-		...官方 Host、插件和原生模块...
-```
-
-这个目录被 `.gitignore` 排除，不会被提交进 Electron 外壳仓库。
-
-不要将 API Key 或签名凭据提交到本仓库。
-
-## 运行桌面应用
-
-```sh
-cd "$(git rev-parse --show-toplevel)"
+# 启动开发模式
 pnpm dev
 ```
 
-这会执行以下步骤：
-
-1. 启动 Electron/Vite 开发环境。
-2. 创建独立的 Utility Host。
-3. 由 Utility Host 使用 Electron 自带 Node runtime 启动官方 `dsh web`。
-4. 通过 HTTP 就绪探测确认官方 Harness 已启动。
-5. 将官方 Web UI 嵌入 Electron 工作台中央区域。
-
-Harness 使用系统 `userData/harness` 目录作为自身的 `DSH_HOME`。它始终绑定随机 `127.0.0.1` 端口，不会暴露到局域网；窗口顶部状态栏会显示当前 loopback URL。
-
-## 高级：更新或替换官方 Runtime
-
-Electron 只要求 Runtime Dist 根目录内有 `runtime-manifest.json`，且其中的 `entry` 指向同目录内的官方 CLI。默认 manifest：
-
-```json
-{
-	"format": 1,
-	"entry": "node_modules/@deepseek-ai/dsh/lib/bin.js"
-}
-```
-
-### 使用其他 npm 版本
-
-编辑 `DeepSeek-Harness-Dist/package.json` 中的 `@deepseek-ai/dsh` 版本，然后在该目录执行 npm install：
-
-```sh
-cd DeepSeek-Harness-Dist
-npm install --omit=dev
-cd ..
-pnpm harness:dist:validate
-```
-
-也可以在创建目录前指定版本：
-
-```sh
-DEEPSEEK_HARNESS_VERSION=latest pnpm harness:dist:install
-```
-
-### 使用你自己从官方源码构建的 Runtime
-
-可将整个 `DeepSeek-Harness-Dist/` 替换为自己构建的完整 Harness runtime。它不能只含 `apps/web/dist` 静态页面，还必须保留与 CLI 配套的 `node_modules`、Host 插件、动态 client bundles 与原生模块。
-
-如果 CLI 位于源码构建的 `apps/cli/lib/bin.js`，将 manifest 改为：
-
-```json
-{
-	"format": 1,
-	"entry": "apps/cli/lib/bin.js"
-}
-```
-
-然后运行：
-
-```sh
-pnpm harness:dist:validate
-```
-
-### 覆盖 Runtime 位置
-
-使用环境变量指定任意绝对路径的 Runtime Dist：
-
-```sh
-DEEPSEEK_HARNESS_DIST="<runtime-dist-directory>" pnpm dev
-```
-
-发行版优先查找该环境变量，其次查找用户数据目录下的 `DeepSeek-Harness-Dist/`，最后查找 Shell 安装目录旁边的同名目录。Shell 安装包本身不包含 Runtime，因此用户可在不修改应用包的情况下替换 Runtime Bundle。
-
-## 配置模型与工作区
-
-应用启动后按以下顺序操作：
-
-1. 打开 **Settings -> Models**。
-2. 选择 DeepSeek 或添加兼容 OpenAI 的 provider。
-3. 输入 API Key 并保存。官方 UI 对已保存的密钥只显示脱敏信息。
-4. 点击 **Choose workspace**，选择需要让 Agent 读取或编辑的项目目录。
-5. 创建会话并发送任务，例如：`概览这个仓库并说明主要模块。`
-
-官方 Harness 也支持在启动前通过环境变量提供 Key：
-
-```sh
-export DEEPSEEK_API_KEY="<your-api-key>"
-pnpm dev
-```
-
-`DEEPSEEK_BASE_URL` 是可选变量，可用于兼容 OpenAI 的私有网关或自定义端点。优先使用 Web UI 的 Models 页面管理密钥；不要将真实 Key 提交到 `.env`、README、终端录屏或 Git 历史。
-
-桌面窗口中可：
-
-- 在中央官方 Harness 页面中选择工作区、创建会话、选择模型和处理审批；
-- 在顶部状态栏查看 Utility Host 与官方 Harness 的运行状态；
-- 通过关闭桌面窗口停止 Utility Host 与官方 Harness 子进程。
-
-停止服务时，在开发终端按 `Ctrl+C`。退出应用时 Utility Host 会停止其官方 Harness 子进程。
-
-## 验证与打包
-
-在 Electron 项目目录运行：
+### 类型检查与构建
 
 ```sh
 pnpm typecheck
@@ -208,80 +100,50 @@ pnpm build
 pnpm test
 ```
 
-Shell 安装包只构建 Electron 代码，不会复制本地 `DeepSeek-Harness-Dist/`：
+### 打包
 
 ```sh
+# macOS Apple Silicon
 pnpm package:mac:arm64
+
+# macOS Apple Silicon（带代理 — 适用于企业网络环境）
+pnpm package:mac:arm64:proxy
+
+# macOS Apple Silicon（带代理 + 自动软链 Runtime）
+pnpm package:mac:arm64:proxy:runtime
+
+# 其他平台
 pnpm package:mac:x64
 pnpm package:win:arm64
 pnpm package:win:x64
 ```
 
-跨平台发布应在对应平台的 CI 或构建机上完成签名与打包；不要把本机 macOS 构建产物当作 Windows 发布验证。
+## CI / Release
 
-## 原生多平台构建
+GitHub Actions 工作流 [package.yml](.github/workflows/package.yml) 自动构建四个平台的 Shell 安装包和 Runtime Bundle。
 
-工作流 [package.yml](.github/workflows/package.yml) 在四个原生 macOS/Windows runner 上分别构建 Shell 和 Runtime，然后汇总 Runtime Bundle：
+- **手动触发**：在 Actions 页面选择 `Package Desktop Release`，可选指定 `harness_version`（默认 `latest`，当前指向 `0.1.1-rc.2`）
+- **自动触发**：推送 `v*` 标签时自动构建并发布 Release
 
-1. 四个 Shell job 只打包 Electron 安装器。
-2. 四个 Runtime job 分别创建 `DeepSeek-Harness-Dist/<target>/`。
-3. 每个 Runtime job 启动官方 Harness Web UI 进行 loopback smoke test。
-4. 汇总 job 生成一个包含四个 Runtime 子目录的 zip Bundle。
-5. tag 发布时，GitHub Release 仅含四个 Shell 安装器和这一个 Runtime Bundle，共五个产出物。
-
-Shell 构建不自动发布；只有最终的 Release job 使用 GitHub 提供的 `GITHUB_TOKEN` 创建或更新 Release。
-
-当前架构矩阵如下：
-
-| 平台 | 架构 | GitHub-hosted runner | 打包命令 |
-| --- | --- | --- | --- |
-| macOS | arm64 | `macos-14` | `pnpm package:mac:arm64` |
-| macOS | x64 | `macos-15-intel` | `pnpm package:mac:x64` |
-| Windows | arm64 | `windows-11-arm` | `pnpm package:win:arm64` |
-| Windows | x64 | `windows-2025` | `pnpm package:win:x64` |
-
-从 GitHub Actions 的 **Package Desktop Release** 工作流手动触发构建。可选的 `harness_version` 输入用于选择官方 npm 版本或 tag；留空时使用 `latest`。
+Runtime 构建时从 npm registry 拉取 `@deepseek-ai/dsh`，无需依赖 deepseek-harness 源码仓库。
 
 ## 常见问题
 
 ### 官方 Web UI 能打开但不能发送消息
 
-在 **Settings -> Models** 中检查是否已保存有效 API Key、provider、模型和可访问的 Base URL。无 Key 时服务器仍可启动，但模型请求会被拒绝。
+在 **Settings → Models** 中检查是否已保存有效 API Key、provider 和模型。
 
-### 提示找不到或无法启动 Runtime Dist
+### 提示找不到 Runtime Dist
 
-先验证当前目录：
+确保 `DeepSeek-Harness-Dist` 文件夹与 `.app` 放在同一目录下，且包含 `runtime-manifest.json`。
 
-```sh
-pnpm harness:dist:validate
-```
+### 网络请求失败
 
-如果目录不存在，重新创建：
-
-```sh
-pnpm harness:dist:install
-```
-
-直接 Runtime 的 `runtime-manifest.json` 或 Bundle 的 `runtime-index.json` 必须存在。所有 `entry` 和子目录路径都必须是 Runtime 根目录内的相对路径。
-
-### 窗口只有深色空白背景
-
-这通常表示 preload 未成功加载。当前版本要求 preload 以 CommonJS 形式构建：
-
-```sh
-pnpm build
-test -f out/preload/index.cjs
-pnpm dev
-```
-
-如果开发终端出现 `Unable to load preload script`，不要通过关闭 `sandbox` 绕过；先确认 `out/preload/index.cjs` 存在。
+点右上角 **Proxy** 按钮，填入 HTTP/HTTPS 代理地址（如 `http://127.0.0.1:7890`），点击 **Save & apply** 即可。
 
 ## 安全边界
 
-- Renderer 启用 `contextIsolation` 和 `sandbox`，没有 Node integration。
-- Preload 仅暴露版本化、受限的桌面 API，不提供通用文件系统或子进程接口。
-- 工作区由 Main process 选择并在持久化前 canonicalize。
-- Desktop Host 通过结构化 IPC 上报就绪状态，不解析 CLI 输出。
-- Official Harness 仅监听随机 `127.0.0.1` loopback 端口；iframe 页面不获得 Electron 或 Node API。
-- Runtime manifest 不允许 CLI entry 逃逸出 `DeepSeek-Harness-Dist/` 根目录。
-- 官方 Harness 的 Agent 具备读取、编辑文件和运行命令的能力。仅选择信任的工作区，并仔细处理每次审批提示。
+- Renderer 启用 `contextIsolation` 和 `sandbox`，没有 Node integration
+- Preload 仅暴露版本化、受限的桌面 API
+- Official Harness 仅监听随机 `127.0.0.1` loopback 端口
+- Runtime manifest 不允许 CLI entry 逃逸出 `DeepSeek-Harness-Dist/` 根目录

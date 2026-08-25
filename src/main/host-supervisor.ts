@@ -1,6 +1,6 @@
 import { utilityProcess, type UtilityProcess } from 'electron'
 import { fileURLToPath } from 'node:url'
-import type { HostStatus } from '../shared/contracts.js'
+import type { HostStatus, ProxySettings } from '../shared/contracts.js'
 
 const HOST_PROTOCOL_VERSION = 1
 
@@ -19,7 +19,8 @@ export class HostSupervisor {
     return () => this.listeners.delete(listener)
   }
 
-  async start(harnessHome: string, runtimeRoot: string): Promise<void> {
+  /** Start the harness child process with the given proxy settings. */
+  start(harnessHome: string, runtimeRoot: string, proxy: ProxySettings): void {
     if (this.process !== undefined) return
     this.stopping = false
     this.publish({ state: 'starting', detail: 'Starting isolated Desktop Host.' })
@@ -41,16 +42,26 @@ export class HostSupervisor {
     child.on('error', (type) => {
       this.publish({ state: 'failed', detail: `Desktop Host error: ${type}.` })
     })
-    child.postMessage({ type: 'start', protocolVersion: HOST_PROTOCOL_VERSION, harnessHome, runtimeRoot })
+    child.postMessage({ type: 'start', protocolVersion: HOST_PROTOCOL_VERSION, harnessHome, runtimeRoot, proxy })
   }
 
-  stop(): void {
+  /** Stop the current harness process, then start a new one with updated proxy settings. */
+  async restart(harnessHome: string, runtimeRoot: string, proxy: ProxySettings): Promise<void> {
+    await this.stop()
+    this.start(harnessHome, runtimeRoot, proxy)
+  }
+
+  stop(): Promise<void> {
     this.stopping = true
     const child = this.process
-    if (child === undefined) return
-    child.postMessage({ type: 'shutdown', protocolVersion: HOST_PROTOCOL_VERSION })
-    const timeout = setTimeout(() => child.kill(), 2_000)
-    timeout.unref()
+    this.process = undefined
+    if (child === undefined) return Promise.resolve()
+    return new Promise((resolve) => {
+      child.once('exit', () => resolve())
+      child.postMessage({ type: 'shutdown', protocolVersion: HOST_PROTOCOL_VERSION })
+      const timeout = setTimeout(() => child.kill(), 2_000)
+      timeout.unref()
+    })
   }
 
   private handleMessage(message: unknown): void {

@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, readFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { isAbsolute, join, relative, resolve } from 'node:path'
+import type { ProxySettings } from '../shared/contracts.js'
 
 const PROTOCOL_VERSION = 1
 const STARTUP_TIMEOUT_MS = 20_000
@@ -19,18 +20,25 @@ process.on('unhandledRejection', () => reportFailure('Desktop Host encountered a
 async function handleParentMessage(value: unknown): Promise<void> {
   if (isShutdownMessage(value)) {
     stopping = true
-    harnessProcess?.kill('SIGTERM')
+    const child = harnessProcess
+    harnessProcess = undefined
+    if (child !== undefined && child.exitCode === null) {
+      child.once('exit', () => process.exit(0))
+      child.kill('SIGTERM')
+    } else {
+      process.exit(0)
+    }
     return
   }
   if (!isStartMessage(value) || harnessProcess !== undefined) return
   try {
-    await startHarness(value.harnessHome, value.runtimeRoot)
+    await startHarness(value.harnessHome, value.runtimeRoot, value.proxy)
   } catch (error) {
     reportFailure(`Official DeepSeek Harness did not become ready: ${errorMessage(error)}`)
   }
 }
 
-async function startHarness(harnessHome: string, runtimeRoot: string): Promise<void> {
+async function startHarness(harnessHome: string, runtimeRoot: string, proxy: ProxySettings): Promise<void> {
   await mkdir(harnessHome, { recursive: true, mode: 0o700 })
   const port = await findAvailablePort()
   const url = `http://127.0.0.1:${String(port)}`
@@ -39,6 +47,9 @@ async function startHarness(harnessHome: string, runtimeRoot: string): Promise<v
     '--expose-internals',
     cliPath,
     'web',
+    // Prevent the harness from opening the OS default browser;
+    // the Electron shell embeds the Web UI in an iframe instead.
+    '--no-open',
     '--host',
     '127.0.0.1',
     '--port',
@@ -49,6 +60,7 @@ async function startHarness(harnessHome: string, runtimeRoot: string): Promise<v
       ...process.env,
       DSH_HOME: harnessHome,
       ELECTRON_RUN_AS_NODE: '1',
+      ...proxyEnvironment(proxy),
     },
     stdio: 'ignore',
   })
@@ -167,17 +179,41 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown startup error.'
 }
 
-function isStartMessage(value: unknown): value is { readonly type: 'start'; readonly protocolVersion: number; readonly harnessHome: string; readonly runtimeRoot: string } {
+function isStartMessage(value: unknown): value is { readonly type: 'start'; readonly protocolVersion: number; readonly harnessHome: string; readonly runtimeRoot: string; readonly proxy: ProxySettings } {
   if (typeof value !== 'object' || value === null) return false
   const record = value as Record<string, unknown>
   return record.type === 'start'
     && record.protocolVersion === PROTOCOL_VERSION
     && typeof record.harnessHome === 'string'
     && typeof record.runtimeRoot === 'string'
+    && isProxySettings(record.proxy)
 }
 
 function isShutdownMessage(value: unknown): value is { readonly type: 'shutdown'; readonly protocolVersion: number } {
   if (typeof value !== 'object' || value === null) return false
   const record = value as Record<string, unknown>
   return record.type === 'shutdown' && record.protocolVersion === PROTOCOL_VERSION
+}
+
+/** Convert ProxySettings to HTTP_PROXY/HTTPS_PROXY/NO_PROXY environment variables
+ *  for the harness child process. Also sets NODE_USE_ENV_PROXY=1 so that
+ *  Node's undici fetch honours the proxy environment variables. */
+function proxyEnvironment(proxy: ProxySettings): Record<string, string> {
+  const env: Record<string, string> = {}
+  if (proxy.httpProxy !== '') env.HTTP_PROXY = proxy.httpProxy
+  if (proxy.httpsProxy !== '') env.HTTPS_PROXY = proxy.httpsProxy
+  if (proxy.noProxy !== '') env.NO_PROXY = proxy.noProxy
+  if (proxy.httpProxy !== '' || proxy.httpsProxy !== '') {
+    // Node 24 opt-in (and newer default): make undici `fetch` honour the env proxy.
+    env.NODE_USE_ENV_PROXY = '1'
+  }
+  return env
+}
+
+function isProxySettings(value: unknown): value is ProxySettings {
+  if (typeof value !== 'object' || value === null) return false
+  const record = value as Record<string, unknown>
+  return typeof record.httpProxy === 'string'
+    && typeof record.httpsProxy === 'string'
+    && typeof record.noProxy === 'string'
 }

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { DESKTOP_API_VERSION, type DesktopApi, type HostStatus } from '../shared/contracts.js'
+import { DESKTOP_API_VERSION, type DesktopApi, type HostStatus, type ProxySettings } from '../shared/contracts.js'
 import { desktopIpc } from '../main/ipc.js'
 
 const desktopApi: DesktopApi = Object.freeze({
@@ -7,6 +7,9 @@ const desktopApi: DesktopApi = Object.freeze({
   getSnapshot: () => ipcRenderer.invoke(desktopIpc.getSnapshot),
   chooseWorkspace: () => ipcRenderer.invoke(desktopIpc.chooseWorkspace),
   clearWorkspace: () => ipcRenderer.invoke(desktopIpc.clearWorkspace),
+  // Proxy settings: read and persist via IPC to the main process.
+  getProxySettings: () => ipcRenderer.invoke(desktopIpc.getProxySettings),
+  setProxySettings: (proxy: ProxySettings) => ipcRenderer.invoke(desktopIpc.setProxySettings, proxy),
   onHostStatus: (listener: (status: HostStatus) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, status: HostStatus): void => listener(status)
     ipcRenderer.on(desktopIpc.hostStatus, handler)
