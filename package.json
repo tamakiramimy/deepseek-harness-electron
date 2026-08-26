@@ -1,6 +1,6 @@
 {
   "name": "deepseek-harness-electron",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "A secure cross-platform desktop workbench for DeepSeek Harness.",
   "author": "DeepSeek Harness Desktop contributors",
   "copyright": "Copyright © 2026 DeepSeek Harness Desktop contributors",
@@ -21,6 +21,7 @@
     "harness:dist:init": "node scripts/harness-dist.mjs --init",
     "harness:dist:install": "node scripts/harness-dist.mjs --install",
     "harness:dist:validate": "node scripts/harness-dist.mjs --validate",
+    "harness:dist:patch-capabilities": "node scripts/patch-harness-model-capabilities.mjs",
     "harness:dist:smoke": "node scripts/smoke-harness-dist.mjs",
     "harness:dist:bundle-index": "node scripts/harness-dist.mjs --bundle-index",
     "harness:dist:bundle-validate": "node scripts/harness-dist.mjs --bundle-validate",

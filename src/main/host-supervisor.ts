@@ -69,6 +69,12 @@ export class HostSupervisor {
       this.publish({ state: 'failed', detail: message.detail })
       return
     }
+    // Startup can outlast a plain spinner when it seeds the plugin market, so
+    // the host narrates that step instead of leaving the UI on one message.
+    if (isHostProgressMessage(message)) {
+      if (this.process !== undefined) this.publish({ state: 'starting', detail: message.detail })
+      return
+    }
     if (!isHostReadyMessage(message)) return
     if (message.protocolVersion !== HOST_PROTOCOL_VERSION || !isLoopbackHarnessUrl(message.url)) {
       this.publish({ state: 'failed', detail: 'Desktop Host protocol version mismatch.' })
@@ -98,6 +104,12 @@ interface HostFailureMessage {
   readonly detail: string
 }
 
+interface HostProgressMessage {
+  readonly type: 'progress'
+  readonly protocolVersion: number
+  readonly detail: string
+}
+
 function isHostReadyMessage(value: unknown): value is HostReadyMessage {
   if (typeof value !== 'object' || value === null) return false
   const record = value as Record<string, unknown>
@@ -113,6 +125,14 @@ function isHostFailureMessage(value: unknown): value is HostFailureMessage {
   const record = value as Record<string, unknown>
   return record.type === 'failed'
     && typeof record.protocolVersion === 'number'
+    && typeof record.detail === 'string'
+}
+
+function isHostProgressMessage(value: unknown): value is HostProgressMessage {
+  if (typeof value !== 'object' || value === null) return false
+  const record = value as Record<string, unknown>
+  return record.type === 'progress'
+    && record.protocolVersion === HOST_PROTOCOL_VERSION
     && typeof record.detail === 'string'
 }
 

@@ -33,6 +33,60 @@ Application directory/
 
 > The Shell selects the matching Runtime for your device automatically. No further setup is needed.
 
+### Configure a global `dsh` command
+
+The Runtime Bundle includes the `dsh` CLI. Install Node.js 22 or newer, then add the matching Runtime's `node_modules/.bin` directory to `PATH`. These examples assume the bundle is extracted to `~/Applications/DeepSeek-Harness-Dist`.
+
+macOS (Apple Silicon; use `darwin-x64` instead on Intel):
+
+```sh
+mkdir -p "$HOME/.local/bin"
+ln -sfn "$HOME/Applications/DeepSeek-Harness-Dist/darwin-arm64/node_modules/.bin/dsh" "$HOME/.local/bin/dsh"
+ln -sfn "$HOME/Applications/DeepSeek-Harness-Dist/darwin-arm64/node_modules/.bin/pnpm" "$HOME/.local/bin/pnpm"
+grep -q 'HOME/.local/bin' "$HOME/.zshrc" || printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.zshrc"
+source "$HOME/.zshrc"
+dsh --version
+pnpm --version
+```
+
+Windows PowerShell (x64; use `win32-arm64` on ARM):
+
+```powershell
+$Bin = "$HOME\Applications\DeepSeek-Harness-Dist\win32-x64\node_modules\.bin"
+$UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+if (($UserPath -split ';') -notcontains $Bin) {
+  [Environment]::SetEnvironmentVariable('Path', "$Bin;$UserPath", 'User')
+}
+# Reopen PowerShell, then verify
+dsh --version
+```
+
+Install the plugin market into the default CLI profile (`~/.dsh`):
+
+```sh
+dsh plugin --profile web add dshmarket
+```
+
+The desktop app has its own `$DSH_HOME`. Install a plugin into the desktop app's `web` profile with:
+
+```sh
+DSH_HOME="$HOME/Library/Application Support/deepseek-harness-electron/harness" \
+  dsh plugin --profile web add dshmarket
+```
+
+Windows PowerShell:
+
+```powershell
+$env:DSH_HOME = "$env:APPDATA\deepseek-harness-electron\harness"
+dsh plugin --profile web add dshmarket
+```
+
+This release also installs `dshmarket` automatically on the desktop app's first start. Verify the default CLI profile with:
+
+```sh
+dsh --profile web --dump-config | grep dshmarket
+```
+
 ## Key Features
 
 ### Built-in Proxy Configuration
@@ -41,9 +95,61 @@ Configure HTTP / HTTPS proxy directly from the desktop workbench — no system s
 
 ![Proxy settings](docs/images/proxy-settings.png)
 
+### Built-in Plugin Market
+
+The community plugin market `dshmarket` is seeded into the `web` profile on first start, so plugins can be browsed and installed from the Web UI right away.
+
+The Runtime Dist bundles pnpm, and the desktop shell writes shims into `$DSH_HOME/.desktop-bin/` and puts them on the Harness child's PATH. End users therefore need neither Node nor pnpm installed — `dsh plugin` reaches its package manager by bare name and fails with exit code 127 when none is found.
+
+Seeding the market needs the npm registry. When the network is unreachable on first start, it is skipped with the reason recorded in `profiles/web/.market-seed-failed`, the Harness starts as usual, and the next start after 24 hours retries. On a corporate network, configure **Proxy** first.
+
+![Plugin market](docs/images/plugin-market.png)
+
 ### Multimodal Vision Model Support
 
 Supports `deepseek-v4-flash-vision-exp` and other vision models. Upload images directly in conversations for analysis.
+
+Configure each model of a third-party OpenAI Responses, Chat Completions, or Anthropic provider under **Models > Customized settings > Model capabilities**. Selecting Text + images writes `input: [text, image]`; selecting reasoning levels writes the model's `reasoningEfforts`, which makes those levels available in the model picker.
+
+When editing `settings.yaml` directly, third-party `llm-pi-ai` providers use model-level `input` and `reasoningEfforts`, plus provider-level `requestImagePixelBudget` and `requestImageMaxBytes`. The fields `inputModalities`, `imagePixelBudget`, and `imageMaxBytes` belong to the official DeepSeek adapter and do not declare vision support on a third-party model.
+
+Reference JSON (the same structure can be written as YAML; replace the sample URL, model, and environment variable with your own values):
+
+```json
+{
+  "llm-pi-ai": {
+    "providers": {
+      "example": {
+        "displayName": "Example API",
+        "apiKeyEnv": "EXAMPLE_API_KEY",
+        "api": "openai-responses",
+        "baseURL": "https://api.example.com/v1",
+        "requestImagePixelBudget": 640000,
+        "requestImageMaxBytes": 1048576,
+        "models": [
+          {
+            "id": "example-vision-model",
+            "name": "Example Vision Model",
+            "contextWindow": 1000000,
+            "input": ["text", "image"],
+            "reasoningEfforts": {
+              "off": null,
+              "low": "low",
+              "medium": "medium",
+              "high": "high",
+              "xhigh": "xhigh"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+`api` may be any Runtime-supported adapter, including `openai-responses`, `openai-completions`, or `anthropic-messages`. Values in `reasoningEfforts` are passed through to that adapter, so list only levels supported by the upstream API. OpenAI-compatible services commonly require a `/v1` suffix in `baseURL`; follow your provider's documentation. Store API keys in `$DSH_HOME/.credentials.yaml` or environment variables, never in README or Git.
+
+![Third-party vision and reasoning levels](docs/images/third-party-model-capabilities.png)
 
 ![Vision model selection](docs/images/vision-model.png)
 
@@ -53,10 +159,17 @@ Supports `deepseek-v4-flash-vision-exp` and other vision models. Upload images d
 
 | Component | Version |
 | --- | --- |
-| Desktop Shell | v0.1.5 |
+| Desktop Shell | v0.1.6 |
 | DeepSeek Harness Runtime | `@deepseek-ai/dsh` v0.1.1-rc.2 |
 
 ## Changelog
+
+**v0.1.6**
+
+- Bundled pnpm in the Runtime, seeded the `dshmarket` plugin market on first start, and added delayed retry after failures
+- Added vision input and reasoning-level settings for third-party `llm-pi-ai` models
+- Added an idempotent Runtime build patch and validation for model capability fields
+- Documented global `dsh`, plugin installation, and third-party model JSON configuration for Release artifacts
 
 **v0.1.5**
 

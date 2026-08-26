@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { patchHarnessModelCapabilities, validateHarnessModelCapabilities } from './patch-harness-model-capabilities.mjs'
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const distRoot = resolve(process.env.DEEPSEEK_HARNESS_DIST ?? join(projectRoot, 'DeepSeek-Harness-Dist'))
@@ -9,6 +10,11 @@ const action = process.argv[2]
 const manifestPath = join(distRoot, 'runtime-manifest.json')
 const packagePath = join(distRoot, 'package.json')
 const runtimeTarget = process.env.DEEPSEEK_HARNESS_TARGET
+// pnpm ships inside the runtime because `dsh plugin` reaches its package
+// manager by bare name (spawnSync('pnpm', ...)), so plugin installs — the
+// community market's included — need one on PATH. The Desktop Host puts a shim
+// for this entry on the harness child's PATH; see src/host/index.ts.
+const PACKAGE_MANAGER_ENTRY = 'node_modules/pnpm/bin/pnpm.cjs'
 
 switch (action) {
   case '--init':
@@ -17,6 +23,7 @@ switch (action) {
   case '--install':
     await initializeDist()
     await run('npm', ['install', '--omit=dev', '--ignore-scripts=false', '--no-audit', '--no-fund'], distRoot)
+    await patchHarnessModelCapabilities(distRoot)
     await writeManifest(runtimeTarget)
     break
   case '--validate':
@@ -34,18 +41,21 @@ switch (action) {
 
 async function initializeDist() {
   await mkdir(distRoot, { recursive: true })
-  try {
-    await access(packagePath)
-  } catch {
-    await writeFile(packagePath, JSON.stringify({
-      name: 'deepseek-harness-dist',
-      private: true,
-      type: 'module',
-      dependencies: {
-        '@deepseek-ai/dsh': process.env.DEEPSEEK_HARNESS_VERSION ?? '0.1.1-rc.2',
-      },
-    }, null, 2).concat('\n'), 'utf8')
+  const dependencies = {
+    '@deepseek-ai/dsh': process.env.DEEPSEEK_HARNESS_VERSION ?? '0.1.1-rc.2',
+    pnpm: process.env.DEEPSEEK_HARNESS_PNPM_VERSION ?? '11.15.1',
   }
+  let manifest = { name: 'deepseek-harness-dist', private: true, type: 'module', dependencies }
+  try {
+    // Keep an existing runtime's pinned versions, but adopt any dependency it
+    // predates — a runtime initialized before pnpm shipped here has no package
+    // manager, and its plugin installs would fail with exit 127.
+    const existing = JSON.parse(await readFile(packagePath, 'utf8'))
+    manifest = { ...existing, dependencies: { ...dependencies, ...existing.dependencies } }
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error
+  }
+  await writeFile(packagePath, JSON.stringify(manifest, null, 2).concat('\n'), 'utf8')
   try {
     await access(manifestPath)
   } catch {
@@ -56,14 +66,21 @@ async function initializeDist() {
 
 async function writeManifest(target = undefined) {
   const runtimeVersion = await readInstalledRuntimeVersion()
+  // Recorded only once installed, so a manifest written by --init (before any
+  // node_modules exists) stays valid; --install rewrites it afterwards.
+  const packageManagerInstalled = await pathExists(join(distRoot, PACKAGE_MANAGER_ENTRY))
   await writeFile(manifestPath, JSON.stringify({
     format: 1,
     entry: 'node_modules/@deepseek-ai/dsh/lib/bin.js',
+    ...(packageManagerInstalled ? { packageManagerEntry: PACKAGE_MANAGER_ENTRY } : {}),
     ...(runtimeVersion === undefined ? {} : { runtimeVersion }),
     ...(target === undefined ? {} : { target }),
   }, null, 2).concat('\n'), 'utf8')
   if (runtimeVersion !== undefined) {
     console.log(`DeepSeek Harness runtime version: ${runtimeVersion}`)
+  }
+  if (!packageManagerInstalled) {
+    console.warn('DeepSeek Harness runtime has no bundled package manager; profile plugin installs will need pnpm on PATH.')
   }
 }
 
@@ -143,12 +160,22 @@ async function validateRuntimeDirectory(runtimeRoot, expectedTarget = undefined)
   const entry = resolve(runtimeRoot, manifest.entry)
   assertPathInside(runtimeRoot, entry, 'Runtime manifest entry')
   await access(entry)
+  // Optional so runtimes predating the bundled package manager still validate.
+  if (manifest.packageManagerEntry !== undefined) {
+    if (typeof manifest.packageManagerEntry !== 'string' || manifest.packageManagerEntry.length === 0) {
+      throw new Error(`Invalid runtime package manager entry: ${runtimeManifestPath}`)
+    }
+    const packageManager = resolve(runtimeRoot, manifest.packageManagerEntry)
+    assertPathInside(runtimeRoot, packageManager, 'Runtime package manager entry')
+    await access(packageManager)
+  }
   if (manifest.runtimeVersion !== undefined) {
     const runtimePackage = JSON.parse(await readFile(join(runtimeRoot, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), 'utf8'))
     if (manifest.runtimeVersion !== runtimePackage.version) {
       throw new Error(`Runtime version mismatch: expected ${manifest.runtimeVersion}, found ${runtimePackage.version}.`)
     }
   }
+  await validateHarnessModelCapabilities(runtimeRoot)
   return entry
 }
 
