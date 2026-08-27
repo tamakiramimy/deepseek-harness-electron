@@ -25,7 +25,13 @@ async function fixtureRuntime() {
   temporaryRoots.push(root)
   const worker = join(root, WORKER_ENTRY)
   await mkdir(dirname(worker), { recursive: true })
-  await writeFile(worker, `const post = (message) => {
+  await writeFile(worker, `function readUtf16(koffi, address) {
+	const bytes = Buffer.from(koffi.view(address, 32768));
+	let end = 0;
+	while (end + 1 < bytes.length && bytes[end] !== 0) end += 2;
+	return bytes.toString("utf16le", 0, end);
+}
+const post = (message) => {
 \t/* v8 ignore next 3 -- disconnect needs a live IPC channel the unit lane must not sever (built-worker.e2e.ts owns the real close path). */
 \tsend(message, () => {
 \t\tif (process.connected) process.disconnect();
@@ -66,6 +72,8 @@ describe('Win32 directory-picker runtime patch', () => {
     expect(patched).toContain('kind: "showing",\n\t\t\t\t\tthreadId\n\t\t\t\t});')
     expect(patched).toContain('kind: "done"')
     expect(patched.match(/}, true\);/g)).toHaveLength(2)
+    expect(patched).toContain('koffi.decode(address, "char16_t", -1)')
+    expect(patched).not.toContain('koffi.view(address, 32768)')
   })
 
   it('rejects an unpatched runtime', async () => {

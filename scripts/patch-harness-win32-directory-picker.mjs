@@ -2,7 +2,8 @@ import { access, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const PATCH_MARKER = 'deepseek-harness-electron:win32-directory-picker-ipc-v1'
+const IPC_PATCH_MARKER = 'deepseek-harness-electron:win32-directory-picker-ipc-v1'
+const UTF16_PATCH_MARKER = 'deepseek-harness-electron:win32-directory-picker-utf16-v2'
 const WORKER_ENTRY = join(
   'node_modules',
   '@deepseek-ai',
@@ -18,38 +19,60 @@ const ORIGINAL_POST = `const post = (message) => {
 	});
 };`
 
-const PATCHED_POST = `/* ${PATCH_MARKER} */
+const PATCHED_POST = `/* ${IPC_PATCH_MARKER} */
 const post = (message, terminal = false) => {
 	send(message, () => {
 		if (terminal && process.connected) process.disconnect();
 	});
 };`
 
+const ORIGINAL_READ_UTF16 = [
+  'function readUtf16(koffi, address) {',
+  '\tconst bytes = Buffer.from(koffi.view(address, 32768));',
+  '\tlet end = 0;',
+  '\twhile (end + 1 < bytes.length && bytes[end] !== 0) end += 2;',
+  '\treturn bytes.toString("utf16le", 0, end);',
+  '}',
+].join('\n')
+
+const PATCHED_READ_UTF16 = [
+  `/* ${UTF16_PATCH_MARKER} */`,
+  'function readUtf16(koffi, address) {',
+  '\treturn koffi.decode(address, "char16_t", -1);',
+  '}',
+].join('\n')
+
 export async function patchHarnessWin32DirectoryPicker(runtimeRoot) {
   const workerPath = join(resolve(runtimeRoot), WORKER_ENTRY)
   const source = await readFile(workerPath, 'utf8')
-  if (source.includes(PATCH_MARKER)) return false
+  if (source.includes(IPC_PATCH_MARKER) && source.includes(UTF16_PATCH_MARKER)) return false
 
-  let patched = replaceOnce(source, ORIGINAL_POST, PATCHED_POST, 'worker post helper')
-  patched = replaceOnce(
-    patched,
-    '\t\tpost({\n\t\t\tkind: "done",',
-    '\t\tpost({\n\t\t\tkind: "done",',
-    'done message',
-    (value) => value,
-  )
-  patched = replaceOnce(
-    patched,
-    '\t\t});\n\t} catch (error) {\n\t\tpost({',
-    '\t\t}, true);\n\t} catch (error) {\n\t\tpost({',
-    'done terminal message',
-  )
-  patched = replaceOnce(
-    patched,
-    '\t\t\tkind: "error",\n\t\t\tmessage: error instanceof Error ? error.stack ?? error.message : String(error)\n\t\t});',
-    '\t\t\tkind: "error",\n\t\t\tmessage: error instanceof Error ? error.stack ?? error.message : String(error)\n\t\t}, true);',
-    'error terminal message',
-  )
+  let patched = source
+  if (!patched.includes(IPC_PATCH_MARKER)) {
+    patched = replaceOnce(patched, ORIGINAL_POST, PATCHED_POST, 'worker post helper')
+    patched = replaceOnce(
+      patched,
+      '\t\tpost({\n\t\t\tkind: "done",',
+      '\t\tpost({\n\t\t\tkind: "done",',
+      'done message',
+      (value) => value,
+    )
+    patched = replaceOnce(
+      patched,
+      '\t\t});\n\t} catch (error) {\n\t\tpost({',
+      '\t\t}, true);\n\t} catch (error) {\n\t\tpost({',
+      'done terminal message',
+    )
+    patched = replaceOnce(
+      patched,
+      '\t\t\tkind: "error",\n\t\t\tmessage: error instanceof Error ? error.stack ?? error.message : String(error)\n\t\t});',
+      '\t\t\tkind: "error",\n\t\t\tmessage: error instanceof Error ? error.stack ?? error.message : String(error)\n\t\t}, true);',
+      'error terminal message',
+    )
+  }
+  if (!patched.includes(UTF16_PATCH_MARKER)) {
+    patched = replaceOnce(patched, ORIGINAL_READ_UTF16, PATCHED_READ_UTF16, 'UTF-16 path decoder')
+  }
 
   await writeFile(workerPath, patched, 'utf8')
   return true
@@ -59,10 +82,15 @@ export async function validateHarnessWin32DirectoryPicker(runtimeRoot) {
   const workerPath = join(resolve(runtimeRoot), WORKER_ENTRY)
   await access(workerPath)
   const source = await readFile(workerPath, 'utf8')
-  if (!source.includes(PATCH_MARKER)) {
+  if (!source.includes(IPC_PATCH_MARKER) || !source.includes(UTF16_PATCH_MARKER)) {
     throw new Error(`Runtime Win32 directory-picker patch is missing: ${workerPath}`)
   }
-  for (const token of ['const post = (message, terminal = false)', 'if (terminal && process.connected)', '}, true);']) {
+  for (const token of [
+    'const post = (message, terminal = false)',
+    'if (terminal && process.connected)',
+    '}, true);',
+    'koffi.decode(address, "char16_t", -1)',
+  ]) {
     if (!source.includes(token)) {
       throw new Error(`Runtime Win32 directory-picker patch is incomplete (${token}): ${workerPath}`)
     }

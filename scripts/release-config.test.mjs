@@ -16,10 +16,12 @@ describe('self-contained desktop release contract', () => {
 
   it('builds platform Runtime packages before self-contained shell artifacts', async () => {
     const workflow = await readFile(join(projectRoot, '.github', 'workflows', 'package.yml'), 'utf8')
+    const archiveScript = await readFile(join(projectRoot, 'scripts', 'package-runtime-archive.mjs'), 'utf8')
     expect(workflow).toContain('needs: runtime')
     expect(workflow).toContain('name: runtime-package-${{ matrix.target }}')
     expect(workflow).toContain('pnpm harness:dist:archive')
     expect(workflow).not.toContain('Assemble Runtime Bundle')
+    expect(archiveScript).toContain('await validateHarnessWin32DirectoryPicker(runtimeRoot)')
   })
 
   it('publishes both Windows setup and portable targets', async () => {

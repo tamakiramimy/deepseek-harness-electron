@@ -4,6 +4,7 @@ import { createReadStream } from 'node:fs'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { validateHarnessWin32DirectoryPicker } from './patch-harness-win32-directory-picker.mjs'
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const runtimeRoot = resolve(process.env.DEEPSEEK_HARNESS_DIST ?? join(projectRoot, 'DeepSeek-Harness-Dist'))
@@ -14,6 +15,7 @@ if (runtimeManifest.format !== 1
   || typeof runtimeManifest.runtimeVersion !== 'string') {
   throw new Error('Runtime must declare format, target and runtimeVersion before it can be archived.')
 }
+await validateHarnessWin32DirectoryPicker(runtimeRoot)
 
 await mkdir(outputDirectory, { recursive: true })
 const archivePath = join(outputDirectory, `DeepSeek-Harness-Dist-${runtimeManifest.target}.zip`)
