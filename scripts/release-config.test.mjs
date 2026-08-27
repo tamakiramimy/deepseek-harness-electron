@@ -24,6 +24,14 @@ describe('self-contained desktop release contract', () => {
     expect(archiveScript).toContain('await validateHarnessWin32DirectoryPicker(runtimeRoot)')
   })
 
+  it('publishes or replaces release assets for tag and manual builds', async () => {
+    const workflow = await readFile(join(projectRoot, '.github', 'workflows', 'package.yml'), 'utf8')
+    expect(workflow).toContain("github.event_name == 'workflow_dispatch'")
+    expect(workflow).toContain("require('./package.json').version")
+    expect(workflow).toContain('gh release upload "${RELEASE_TAG}" release-assets/* --clobber')
+    expect(workflow).toContain('gh release create "${RELEASE_TAG}" release-assets/*')
+  })
+
   it('publishes both Windows setup and portable targets', async () => {
     const manifest = JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8'))
     const config = await readFile(join(projectRoot, 'electron-builder.yml'), 'utf8')
