@@ -10,10 +10,10 @@ Download one file matching your device from [Releases](https://github.com/tamaki
 
 | Device | Installer / portable app |
 | --- | --- |
-| macOS Apple Silicon | `DeepSeek Harness Desktop-<version>-mac-arm64.dmg` |
-| macOS Intel | `DeepSeek Harness Desktop-<version>-mac-x64.dmg` |
-| Windows ARM64 | `...-win-arm64-setup.exe` or `...-win-arm64-portable.exe` |
-| Windows x64 | `...-win-x64-setup.exe` or `...-win-x64-portable.exe` |
+| macOS Apple Silicon | `DeepSeek.Harness.Desktop-<version>-darwin-arm64.dmg` |
+| macOS Intel | `DeepSeek.Harness.Desktop-<version>-darwin-x64.dmg` |
+| Windows ARM64 | `DeepSeek.Harness.Desktop-<version>-win32-arm64-setup.exe` or `...-portable.exe` |
+| Windows x64 | `DeepSeek.Harness.Desktop-<version>-win32-x64-setup.exe` or `...-portable.exe` |
 
 Windows `setup.exe` uses an assisted installer and lets you select the installation directory. `portable.exe` is a single-file, no-install executable that self-extracts when launched. On first start, the app verifies the Runtime SHA-256 and extracts it into user data for reuse.
 

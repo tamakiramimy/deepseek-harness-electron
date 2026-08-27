@@ -10,10 +10,10 @@
 
 | 设备 | 安装包 / 便携版 |
 | --- | --- |
-| macOS Apple Silicon | `DeepSeek Harness Desktop-<version>-mac-arm64.dmg` |
-| macOS Intel | `DeepSeek Harness Desktop-<version>-mac-x64.dmg` |
-| Windows ARM64 | `...-win-arm64-setup.exe` 或 `...-win-arm64-portable.exe` |
-| Windows x64 | `...-win-x64-setup.exe` 或 `...-win-x64-portable.exe` |
+| macOS Apple Silicon | `DeepSeek.Harness.Desktop-<version>-darwin-arm64.dmg` |
+| macOS Intel | `DeepSeek.Harness.Desktop-<version>-darwin-x64.dmg` |
+| Windows ARM64 | `DeepSeek.Harness.Desktop-<version>-win32-arm64-setup.exe` 或 `...-portable.exe` |
+| Windows x64 | `DeepSeek.Harness.Desktop-<version>-win32-x64-setup.exe` 或 `...-portable.exe` |
 
 Windows `setup.exe` 使用向导安装，可选择安装目录；`portable.exe` 是免安装单文件，自解压后运行。首次启动会校验 Runtime 的 SHA-256 并将其展开到用户数据目录，后续直接复用。
 
