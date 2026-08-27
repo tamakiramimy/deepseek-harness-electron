@@ -3,6 +3,8 @@ import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { patchHarnessModelCapabilities, validateHarnessModelCapabilities } from './patch-harness-model-capabilities.mjs'
+import { patchHarnessWin32DirectoryPicker, validateHarnessWin32DirectoryPicker } from './patch-harness-win32-directory-picker.mjs'
+import { pruneRuntimeForTarget, validatePrunedRuntime } from './prune-runtime.mjs'
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const distRoot = resolve(process.env.DEEPSEEK_HARNESS_DIST ?? join(projectRoot, 'DeepSeek-Harness-Dist'))
@@ -24,6 +26,8 @@ switch (action) {
     await initializeDist()
     await run('npm', ['install', '--omit=dev', '--ignore-scripts=false', '--no-audit', '--no-fund'], distRoot)
     await patchHarnessModelCapabilities(distRoot)
+    await patchHarnessWin32DirectoryPicker(distRoot)
+    if (runtimeTarget !== undefined) await pruneRuntimeForTarget(distRoot, runtimeTarget)
     await writeManifest(runtimeTarget)
     break
   case '--validate':
@@ -176,7 +180,31 @@ async function validateRuntimeDirectory(runtimeRoot, expectedTarget = undefined)
     }
   }
   await validateHarnessModelCapabilities(runtimeRoot)
+  await validateHarnessWin32DirectoryPicker(runtimeRoot)
+  if (expectedTarget !== undefined) await validatePrunedRuntime(runtimeRoot, expectedTarget)
+  if (expectedTarget?.startsWith('win32-') === true) {
+    await validateWindowsRuntimeAssets(runtimeRoot, expectedTarget)
+  }
   return entry
+}
+
+async function validateWindowsRuntimeAssets(runtimeRoot, target) {
+  const arch = target.slice('win32-'.length)
+  if (arch !== 'x64' && arch !== 'arm64') {
+    throw new Error(`Unsupported Windows runtime target: ${target}`)
+  }
+  const required = [
+    join('node_modules', '@deepseek-ai', 'dsh-host-directory-picker-native', 'lib', 'worker.cjs'),
+    join('node_modules', '@koromix', `koffi-win32-${arch}`, 'package.json'),
+    join('node_modules', '@vscode', `ripgrep-win32-${arch}`, 'bin', 'rg.exe'),
+    join('node_modules', 'node-pty', 'prebuilds', target, 'conpty.node'),
+    join('node_modules', 'node-pty', 'prebuilds', target, 'conpty_console_list.node'),
+    join('node_modules', 'node-pty', 'prebuilds', target, 'conpty', 'OpenConsole.exe'),
+    join('node_modules', 'node-pty', 'prebuilds', target, 'conpty', 'conpty.dll'),
+  ]
+  for (const entry of required) {
+    await access(join(runtimeRoot, entry))
+  }
 }
 
 function assertPathInside(root, candidate, label) {

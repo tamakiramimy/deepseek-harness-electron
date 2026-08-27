@@ -1,23 +1,22 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
-import { delimiter, isAbsolute, join, relative, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import type { ProxySettings } from '../shared/contracts.js'
+import { createProxyEnvironment } from './proxy-environment.js'
+import { shimPath, writeRuntimeShims } from './runtime-shims.js'
 
 const PROTOCOL_VERSION = 1
 const STARTUP_TIMEOUT_MS = 20_000
 const STARTUP_POLL_INTERVAL_MS = 150
-/** Directory under DSH_HOME holding the package-manager shims put on the harness child's PATH. */
-const SHIM_DIRECTORY = '.desktop-bin'
 /** The community plugin market, seeded into the web profile on first run. */
 const MARKET_PACKAGE = 'dshmarket'
-/** A market install fetches from the registry; bounded so a dead network cannot wedge startup. */
-const PROVISION_TIMEOUT_MS = 120_000
-/** How long a failed market install is left alone before the next start retries it. */
-const PROVISION_RETRY_AFTER_MS = 24 * 60 * 60 * 1_000
+/** A user-requested market install is bounded and never blocks core Harness startup. */
+const MARKET_INSTALL_TIMEOUT_MS = 120_000
+const MAX_COMMAND_ERROR_LENGTH = 2_048
 let harnessProcess: ChildProcess | undefined
-/** The provisioning CLI run, tracked only so a shutdown mid-install does not orphan its pnpm. */
 let provisionProcess: ChildProcess | undefined
+let activeRuntime: ActiveRuntimeContext | undefined
 let starting = false
 let stopping = false
 
@@ -31,10 +30,10 @@ process.on('unhandledRejection', () => reportFailure('Desktop Host encountered a
 async function handleParentMessage(value: unknown): Promise<void> {
   if (isShutdownMessage(value)) {
     stopping = true
+    activeRuntime = undefined
     const child = harnessProcess
     harnessProcess = undefined
-    // A quit during provisioning would otherwise leave its pnpm running after this exits.
-    provisionProcess?.kill('SIGTERM')
+    if (provisionProcess !== undefined) void terminateProcessTree(provisionProcess)
     provisionProcess = undefined
     if (child !== undefined && child.exitCode === null) {
       child.once('exit', () => process.exit(0))
@@ -44,8 +43,10 @@ async function handleParentMessage(value: unknown): Promise<void> {
     }
     return
   }
-  // `starting` and not just `harnessProcess`: provisioning runs before the
-  // harness is spawned, so a second start message would seed the market twice.
+  if (isInstallMarketMessage(value)) {
+    if (activeRuntime !== undefined && provisionProcess === undefined) void installMarket(activeRuntime)
+    return
+  }
   if (!isStartMessage(value) || starting || harnessProcess !== undefined) return
   starting = true
   try {
@@ -60,11 +61,8 @@ async function handleParentMessage(value: unknown): Promise<void> {
 async function startHarness(harnessHome: string, runtimeRoot: string, proxy: ProxySettings): Promise<void> {
   await mkdir(harnessHome, { recursive: true, mode: 0o700 })
   const runtime = await resolveRuntime(runtimeRoot)
-  // PATH first: `dsh plugin` (and the market UI, which goes through it) spawns
-  // its package manager by bare name, so without a shim an end user without a
-  // global pnpm gets exit 127 on every plugin install.
-  const shimDirectory = await writePackageManagerShims(harnessHome, runtime.packageManagerPath)
-  await provisionMarket(harnessHome, runtime.cliPath, shimDirectory, proxy)
+  const shimDirectory = await writeRuntimeShims(harnessHome, runtime)
+  activeRuntime = { harnessHome, runtime, shimDirectory, proxy }
   const port = await findAvailablePort()
   const url = `http://127.0.0.1:${String(port)}`
   const child = spawn(process.execPath, [
@@ -81,11 +79,10 @@ async function startHarness(harnessHome: string, runtimeRoot: string, proxy: Pro
   ], {
     cwd: harnessHome,
     env: {
-      ...process.env,
+      ...createProxyEnvironment(process.env, proxy),
       DSH_HOME: harnessHome,
       ELECTRON_RUN_AS_NODE: '1',
       PATH: shimPath(shimDirectory),
-      ...proxyEnvironment(proxy),
     },
     stdio: 'ignore',
   })
@@ -103,6 +100,10 @@ async function startHarness(harnessHome: string, runtimeRoot: string, proxy: Pro
     startedAt: Date.now(),
     url,
   })
+  const marketInstalled = await profileHasMarket(join(harnessHome, 'profiles', 'web'))
+  reportMarket(marketInstalled ? 'installed' : 'not-installed', marketInstalled
+    ? 'Plugin market is installed.'
+    : 'Plugin market is optional and not installed.')
 }
 
 interface ResolvedRuntime {
@@ -118,6 +119,7 @@ async function resolveRuntime(runtimeRoot: string): Promise<ResolvedRuntime> {
     format?: unknown
     entry?: unknown
     packageManagerEntry?: unknown
+    target?: unknown
   }
   if (manifest.format !== 1 || typeof manifest.entry !== 'string' || manifest.entry.length === 0) {
     throw new Error('DeepSeek-Harness-Dist has an invalid runtime-manifest.json.')
@@ -125,6 +127,10 @@ async function resolveRuntime(runtimeRoot: string): Promise<ResolvedRuntime> {
   const cliPath = resolve(root, manifest.entry)
   assertPathInsideRuntime(root, cliPath, 'Runtime manifest entry')
   await access(cliPath)
+  const target = `${process.platform}-${process.arch}`
+  if (manifest.target !== undefined && manifest.target !== target) {
+    throw new Error(`DeepSeek-Harness-Dist targets ${String(manifest.target)}, but this application requires ${target}.`)
+  }
   return { cliPath, packageManagerPath: await resolvePackageManager(root, manifest.packageManagerEntry) }
 }
 
@@ -139,74 +145,30 @@ async function resolvePackageManager(root: string, entry: unknown): Promise<stri
   return await pathExists(packageManagerPath) ? packageManagerPath : undefined
 }
 
-/**
- * Write `pnpm`/`node` shims into DSH_HOME and return their directory. Each
- * re-executes this Electron binary as Node (ELECTRON_RUN_AS_NODE), so a plugin
- * install needs no Node or pnpm installed on the user's machine. Rewritten
- * every start: the runtime path moves when the app is updated or relocated.
- */
-async function writePackageManagerShims(harnessHome: string, packageManagerPath: string | undefined): Promise<string> {
-  const shimDirectory = join(harnessHome, SHIM_DIRECTORY)
-  await mkdir(shimDirectory, { recursive: true, mode: 0o700 })
-  if (packageManagerPath === undefined) return shimDirectory
-  const shims = process.platform === 'win32'
-    ? [
-        { name: 'pnpm.cmd', body: windowsShim([process.execPath, packageManagerPath]) },
-        { name: 'node.cmd', body: windowsShim([process.execPath]) },
-      ]
-    : [
-        { name: 'pnpm', body: posixShim([process.execPath, packageManagerPath]) },
-        { name: 'node', body: posixShim([process.execPath]) },
-      ]
-  for (const shim of shims) {
-    const shimPath = join(shimDirectory, shim.name)
-    await writeFile(shimPath, shim.body, 'utf8')
-    await chmod(shimPath, 0o700)
-  }
-  return shimDirectory
+interface ActiveRuntimeContext {
+  readonly harnessHome: string
+  readonly runtime: ResolvedRuntime
+  readonly shimDirectory: string
+  readonly proxy: ProxySettings
 }
 
-function posixShim(command: readonly string[]): string {
-  const quoted = command.map((part) => `'${part.replaceAll("'", `'\\''`)}'`).join(' ')
-  return `#!/bin/sh\nexport ELECTRON_RUN_AS_NODE=1\nexec ${quoted} "$@"\n`
-}
-
-function windowsShim(command: readonly string[]): string {
-  // Windows paths cannot contain a double quote, so quoting alone is enough.
-  const quoted = command.map((part) => `"${part}"`).join(' ')
-  return `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n${quoted} %*\r\n`
-}
-
-function shimPath(shimDirectory: string): string {
-  const inherited = process.env.PATH ?? ''
-  return inherited === '' ? shimDirectory : `${shimDirectory}${delimiter}${inherited}`
-}
-
-/**
- * Seed the community plugin market into the web profile the first time it is
- * missing. Best effort by design: the market is an out-of-tree npm dependency,
- * so seeding needs the registry, and a failure here must leave a bootable
- * profile rather than block the app. `dsh plugin` only rewrites the profile
- * manifest after its install succeeds, so a failed attempt changes nothing.
- */
-async function provisionMarket(
-  harnessHome: string,
-  cliPath: string,
-  shimDirectory: string,
-  proxy: ProxySettings,
-): Promise<void> {
+async function installMarket(context: ActiveRuntimeContext): Promise<void> {
+  const { harnessHome, runtime, shimDirectory, proxy } = context
   const profileDirectory = join(harnessHome, 'profiles', 'web')
-  if (await profileHasMarket(profileDirectory)) return
-  const marker = join(profileDirectory, '.market-seed-failed')
-  if (await isWithinRetryWindow(marker)) return
-  report('progress', 'Installing the DeepSeek Harness plugin market.')
-  const failure = await runCli(cliPath, ['plugin', '--profile', 'web', 'add', MARKET_PACKAGE], harnessHome, shimDirectory, proxy)
-  // A shutdown killed the install; the marker would misreport a real failure.
-  if (failure === undefined || stopping) return
-  // mkdir because a failure before `dsh plugin` initialized the profile leaves no directory.
-  await mkdir(profileDirectory, { recursive: true, mode: 0o700 })
-  await writeFile(marker, `${new Date().toISOString()} ${failure}\n`, 'utf8')
-  report('progress', `Continuing without the plugin market: ${failure}`)
+  if (await profileHasMarket(profileDirectory)) {
+    reportMarket('installed', 'Plugin market is already installed.')
+    return
+  }
+  if (runtime.packageManagerPath === undefined) {
+    reportMarket('failed', 'The embedded Runtime has no package manager; core Harness remains available.')
+    return
+  }
+  reportMarket('installing', 'Installing the optional plugin market.')
+  const failure = await runCli(runtime.cliPath, ['plugin', '--profile', 'web', 'add', MARKET_PACKAGE], harnessHome, shimDirectory, proxy)
+  if (stopping) return
+  reportMarket(failure === undefined ? 'installed' : 'failed', failure === undefined
+    ? 'Plugin market installed. Harness will restart to load it.'
+    : `Plugin market installation failed; core Harness is still available. ${failure}`)
 }
 
 async function profileHasMarket(profileDirectory: string): Promise<boolean> {
@@ -221,15 +183,6 @@ async function profileHasMarket(profileDirectory: string): Promise<boolean> {
   }
 }
 
-async function isWithinRetryWindow(marker: string): Promise<boolean> {
-  try {
-    const attempted = Date.parse((await readFile(marker, 'utf8')).slice(0, 24))
-    return Number.isFinite(attempted) && Date.now() - attempted < PROVISION_RETRY_AFTER_MS
-  } catch {
-    return false
-  }
-}
-
 /** Run the harness CLI to completion. Returns undefined on success, else a reason. */
 function runCli(
   cliPath: string,
@@ -239,22 +192,27 @@ function runCli(
   proxy: ProxySettings,
 ): Promise<string | undefined> {
   return new Promise((resolvePromise) => {
+    let stderr = ''
+    let timedOut = false
     const child = spawn(process.execPath, [cliPath, ...args], {
       cwd: harnessHome,
       env: {
-        ...process.env,
+        ...createProxyEnvironment(process.env, proxy),
         DSH_HOME: harnessHome,
         ELECTRON_RUN_AS_NODE: '1',
         PATH: shimPath(shimDirectory),
-        ...proxyEnvironment(proxy),
       },
-      stdio: 'ignore',
+      detached: process.platform !== 'win32',
+      stdio: ['ignore', 'ignore', 'pipe'],
     })
     provisionProcess = child
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr = `${stderr}${chunk.toString('utf8')}`.slice(-MAX_COMMAND_ERROR_LENGTH)
+    })
     const timeout = setTimeout(() => {
-      child.kill('SIGTERM')
-      resolvePromise(`${args.join(' ')} timed out`)
-    }, PROVISION_TIMEOUT_MS)
+      timedOut = true
+      void terminateProcessTree(child).then(() => settle(`${args.join(' ')} timed out`))
+    }, MARKET_INSTALL_TIMEOUT_MS)
     timeout.unref()
     const settle = (reason: string | undefined): void => {
       clearTimeout(timeout)
@@ -263,9 +221,38 @@ function runCli(
     }
     child.once('error', (error) => settle(errorMessage(error)))
     child.once('exit', (code) => {
-      settle(code === 0 ? undefined : `${args.join(' ')} exited with code ${String(code)}`)
+      if (timedOut) return
+      const detail = sanitizeCommandError(stderr)
+      settle(code === 0 ? undefined : `${args.join(' ')} exited with code ${String(code)}${detail === '' ? '' : `: ${detail}`}`)
     })
   })
+}
+
+async function terminateProcessTree(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.pid === undefined) return
+  if (process.platform === 'win32') {
+    await new Promise<void>((resolvePromise) => {
+      const killer = spawn('taskkill.exe', ['/pid', String(child.pid), '/T', '/F'], {
+        windowsHide: true,
+        stdio: 'ignore',
+      })
+      killer.once('error', () => resolvePromise())
+      killer.once('exit', () => resolvePromise())
+    })
+    return
+  }
+  try {
+    process.kill(-child.pid, 'SIGTERM')
+  } catch {
+    child.kill('SIGTERM')
+  }
+}
+
+function sanitizeCommandError(value: string): string {
+  return value
+    .replaceAll(/\/\/[^/@\s]+:[^/@\s]+@/g, '//***:***@')
+    .replaceAll(/[\r\n]+/g, ' ')
+    .trim()
 }
 
 async function resolveRuntimeRoot(root: string): Promise<string> {
@@ -350,6 +337,10 @@ function report(type: 'failed' | 'progress', detail: string): void {
   process.parentPort.postMessage({ type, protocolVersion: PROTOCOL_VERSION, detail })
 }
 
+function reportMarket(state: 'not-installed' | 'installing' | 'installed' | 'failed', detail: string): void {
+  process.parentPort.postMessage({ type: 'market', protocolVersion: PROTOCOL_VERSION, state, detail })
+}
+
 function reportFailure(detail: string): void {
   report('failed', detail)
 }
@@ -374,19 +365,10 @@ function isShutdownMessage(value: unknown): value is { readonly type: 'shutdown'
   return record.type === 'shutdown' && record.protocolVersion === PROTOCOL_VERSION
 }
 
-/** Convert ProxySettings to HTTP_PROXY/HTTPS_PROXY/NO_PROXY environment variables
- *  for the harness child process. Also sets NODE_USE_ENV_PROXY=1 so that
- *  Node's undici fetch honours the proxy environment variables. */
-function proxyEnvironment(proxy: ProxySettings): Record<string, string> {
-  const env: Record<string, string> = {}
-  if (proxy.httpProxy !== '') env.HTTP_PROXY = proxy.httpProxy
-  if (proxy.httpsProxy !== '') env.HTTPS_PROXY = proxy.httpsProxy
-  if (proxy.noProxy !== '') env.NO_PROXY = proxy.noProxy
-  if (proxy.httpProxy !== '' || proxy.httpsProxy !== '') {
-    // Node 24 opt-in (and newer default): make undici `fetch` honour the env proxy.
-    env.NODE_USE_ENV_PROXY = '1'
-  }
-  return env
+function isInstallMarketMessage(value: unknown): value is { readonly type: 'install-market'; readonly protocolVersion: number } {
+  if (typeof value !== 'object' || value === null) return false
+  const record = value as Record<string, unknown>
+  return record.type === 'install-market' && record.protocolVersion === PROTOCOL_VERSION
 }
 
 function isProxySettings(value: unknown): value is ProxySettings {

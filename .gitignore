@@ -10,6 +10,7 @@ DeepSeek-Harness-Dist/
 harness-home/
 Temp-DeepSeek-Harness-Electron/
 runtime-output/
+runtime-package/
 release-assets/
 
 # Local tooling state and generated diagnostics.

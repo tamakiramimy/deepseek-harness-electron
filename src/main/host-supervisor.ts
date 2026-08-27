@@ -1,6 +1,6 @@
 import { utilityProcess, type UtilityProcess } from 'electron'
 import { fileURLToPath } from 'node:url'
-import type { HostStatus, ProxySettings } from '../shared/contracts.js'
+import { EMPTY_MARKET_STATUS, type HostStatus, type MarketStatus, type ProxySettings } from '../shared/contracts.js'
 
 const HOST_PROTOCOL_VERSION = 1
 
@@ -8,10 +8,17 @@ export class HostSupervisor {
   private process: UtilityProcess | undefined
   private stopping = false
   private status: HostStatus = { state: 'stopped', detail: 'Desktop Host has not started.' }
+  private marketStatus: MarketStatus = EMPTY_MARKET_STATUS
   private readonly listeners = new Set<(status: HostStatus) => void>()
+  private readonly marketListeners = new Set<(status: MarketStatus) => void>()
+  private launch: { harnessHome: string; runtimeRoot: string; proxy: ProxySettings } | undefined
 
   currentStatus(): HostStatus {
     return this.status
+  }
+
+  currentMarketStatus(): MarketStatus {
+    return this.marketStatus
   }
 
   subscribe(listener: (status: HostStatus) => void): () => void {
@@ -19,9 +26,15 @@ export class HostSupervisor {
     return () => this.listeners.delete(listener)
   }
 
+  subscribeMarket(listener: (status: MarketStatus) => void): () => void {
+    this.marketListeners.add(listener)
+    return () => this.marketListeners.delete(listener)
+  }
+
   /** Start the harness child process with the given proxy settings. */
   start(harnessHome: string, runtimeRoot: string, proxy: ProxySettings): void {
     if (this.process !== undefined) return
+    this.launch = { harnessHome, runtimeRoot, proxy }
     this.stopping = false
     this.publish({ state: 'starting', detail: 'Starting isolated Desktop Host.' })
     const entry = fileURLToPath(new URL('./host.js', import.meta.url))
@@ -45,6 +58,15 @@ export class HostSupervisor {
     child.postMessage({ type: 'start', protocolVersion: HOST_PROTOCOL_VERSION, harnessHome, runtimeRoot, proxy })
   }
 
+  installMarket(): void {
+    if (this.process === undefined || this.status.state !== 'ready') {
+      throw new Error('Harness must be ready before installing the optional plugin market.')
+    }
+    if (this.marketStatus.state === 'installing') return
+    this.publishMarket({ state: 'installing', detail: 'Installing the optional plugin market.' })
+    this.process.postMessage({ type: 'install-market', protocolVersion: HOST_PROTOCOL_VERSION })
+  }
+
   /** Stop the current harness process, then start a new one with updated proxy settings. */
   async restart(harnessHome: string, runtimeRoot: string, proxy: ProxySettings): Promise<void> {
     await this.stop()
@@ -65,6 +87,15 @@ export class HostSupervisor {
   }
 
   private handleMessage(message: unknown): void {
+    if (isHostMarketMessage(message)) {
+      const shouldRestart = message.state === 'installed' && this.marketStatus.state === 'installing'
+      this.publishMarket({ state: message.state, detail: message.detail })
+      if (shouldRestart && this.launch !== undefined) {
+        const launch = this.launch
+        void this.restart(launch.harnessHome, launch.runtimeRoot, launch.proxy)
+      }
+      return
+    }
     if (isHostFailureMessage(message)) {
       this.publish({ state: 'failed', detail: message.detail })
       return
@@ -88,6 +119,11 @@ export class HostSupervisor {
     this.status = status
     for (const listener of this.listeners) listener(status)
   }
+
+  private publishMarket(status: MarketStatus): void {
+    this.marketStatus = status
+    for (const listener of this.marketListeners) listener(status)
+  }
 }
 
 interface HostReadyMessage {
@@ -107,6 +143,13 @@ interface HostFailureMessage {
 interface HostProgressMessage {
   readonly type: 'progress'
   readonly protocolVersion: number
+  readonly detail: string
+}
+
+interface HostMarketMessage {
+  readonly type: 'market'
+  readonly protocolVersion: number
+  readonly state: MarketStatus['state']
   readonly detail: string
 }
 
@@ -133,6 +176,15 @@ function isHostProgressMessage(value: unknown): value is HostProgressMessage {
   const record = value as Record<string, unknown>
   return record.type === 'progress'
     && record.protocolVersion === HOST_PROTOCOL_VERSION
+    && typeof record.detail === 'string'
+}
+
+function isHostMarketMessage(value: unknown): value is HostMarketMessage {
+  if (typeof value !== 'object' || value === null) return false
+  const record = value as Record<string, unknown>
+  return record.type === 'market'
+    && record.protocolVersion === HOST_PROTOCOL_VERSION
+    && (record.state === 'not-installed' || record.state === 'installing' || record.state === 'installed' || record.state === 'failed')
     && typeof record.detail === 'string'
 }
 

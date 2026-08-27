@@ -6,86 +6,16 @@
 
 ## 快速开始
 
-从 [Releases](https://github.com/tamakiramimy/deepseek-harness-electron/releases) 下载两个文件：
+从 [Releases](https://github.com/tamakiramimy/deepseek-harness-electron/releases) 下载与你设备匹配的一个文件。每个文件都已内置对应架构的 Runtime，无需另外下载或复制 `DeepSeek-Harness-Dist`：
 
-1. **Shell 安装包** — 根据你的设备选择：
-
-| 设备 | 安装包 |
+| 设备 | 安装包 / 便携版 |
 | --- | --- |
-| macOS Apple Silicon | `DeepSeek.Harness.Desktop-<version>-darwin-arm64.dmg` |
-| macOS Intel | `DeepSeek.Harness.Desktop-<version>-darwin-x64.dmg` |
-| Windows ARM | `DeepSeek.Harness.Desktop-<version>-win32-arm64.exe` |
-| Windows x64 | `DeepSeek.Harness.Desktop-<version>-win32-x64.exe` |
+| macOS Apple Silicon | `DeepSeek Harness Desktop-<version>-mac-arm64.dmg` |
+| macOS Intel | `DeepSeek Harness Desktop-<version>-mac-x64.dmg` |
+| Windows ARM64 | `...-win-arm64-setup.exe` 或 `...-win-arm64-portable.exe` |
+| Windows x64 | `...-win-x64-setup.exe` 或 `...-win-x64-portable.exe` |
 
-2. **Runtime Bundle** — 所有平台共用：
-
-   `DeepSeek-Harness-Dist-<version>.zip`
-
-将 Runtime Bundle 解压后，把 `DeepSeek-Harness-Dist` 文件夹放到应用文件旁边，启动应用即可：
-
-```text
-应用所在目录/
-├── DeepSeek Harness Desktop.app   (或 .exe)
-└── DeepSeek-Harness-Dist/
-```
-
-![目录结构](docs/images/directory-structure.png)
-
-> Shell 会自动选择当前设备所需的 Runtime，无需额外设置。
-
-### 配置全局 `dsh` 命令
-
-Runtime Bundle 本身包含 `dsh` CLI。先安装 Node.js 22 或更高版本，再将与你平台匹配的 Runtime 中的 `node_modules/.bin` 加入 `PATH`。以下示例假设 Runtime Bundle 已解压到 `~/Applications/DeepSeek-Harness-Dist`。
-
-macOS（Apple Silicon；Intel 设备把 `darwin-arm64` 改成 `darwin-x64`）：
-
-```sh
-mkdir -p "$HOME/.local/bin"
-ln -sfn "$HOME/Applications/DeepSeek-Harness-Dist/darwin-arm64/node_modules/.bin/dsh" "$HOME/.local/bin/dsh"
-ln -sfn "$HOME/Applications/DeepSeek-Harness-Dist/darwin-arm64/node_modules/.bin/pnpm" "$HOME/.local/bin/pnpm"
-grep -q 'HOME/.local/bin' "$HOME/.zshrc" || printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.zshrc"
-source "$HOME/.zshrc"
-dsh --version
-pnpm --version
-```
-
-Windows PowerShell（x64；ARM 设备把 `win32-x64` 改成 `win32-arm64`）：
-
-```powershell
-$Bin = "$HOME\Applications\DeepSeek-Harness-Dist\win32-x64\node_modules\.bin"
-$UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if (($UserPath -split ';') -notcontains $Bin) {
-  [Environment]::SetEnvironmentVariable('Path', "$Bin;$UserPath", 'User')
-}
-# 重新打开 PowerShell 后验证
-dsh --version
-```
-
-为默认 CLI profile（`~/.dsh`）安装插件市场：
-
-```sh
-dsh plugin --profile web add dshmarket
-```
-
-桌面应用使用自己的 `$DSH_HOME`。要把插件安装到桌面应用的 `web` profile，请执行：
-
-```sh
-DSH_HOME="$HOME/Library/Application Support/deepseek-harness-electron/harness" \
-  dsh plugin --profile web add dshmarket
-```
-
-Windows PowerShell：
-
-```powershell
-$env:DSH_HOME = "$env:APPDATA\deepseek-harness-electron\harness"
-dsh plugin --profile web add dshmarket
-```
-
-本版本首次启动桌面应用时也会自动安装 `dshmarket`。验证默认 CLI profile 的安装结果：
-
-```sh
-dsh --profile web --dump-config | grep dshmarket
-```
+Windows `setup.exe` 使用向导安装，可选择安装目录；`portable.exe` 是免安装单文件，自解压后运行。首次启动会校验 Runtime 的 SHA-256 并将其展开到用户数据目录，后续直接复用。
 
 ## 主要特性
 
@@ -97,11 +27,11 @@ dsh --profile web --dump-config | grep dshmarket
 
 ### 内置插件市场
 
-首次启动时会自动把社区插件市场 `dshmarket` 装入 `web` profile，之后可直接在 Web UI 内浏览和安装插件。
+社区插件市场 `dshmarket` 是可选组件。应用启动不依赖市场；需要时在外壳设置的 **Plugin market** 区域点击 **Install**，失败后可点击 **Retry**。
 
 Runtime Dist 自带 pnpm，桌面端会在 `$DSH_HOME/.desktop-bin/` 写入 shim 并加进 Harness 子进程的 PATH。因此终端用户机器上无需安装 Node 或 pnpm —— `dsh plugin` 按裸名调用包管理器，缺失时会以退出码 127 失败。
 
-市场安装需要访问 npm registry。若首次启动时网络不通，会跳过并在 `profiles/web/.market-seed-failed` 记录原因，Harness 照常启动；24 小时后下次启动重试。企业网络下建议先在右上角 **Proxy** 配好代理。
+市场安装需要访问 npm registry。安装失败不会中断 Harness；企业网络下建议先在右上角 **Proxy** 配好代理再重试。
 
 ![插件市场](docs/images/plugin-market.png)
 
@@ -159,10 +89,19 @@ Runtime Dist 自带 pnpm，桌面端会在 `$DSH_HOME/.desktop-bin/` 写入 shim
 
 | 组件 | 版本 |
 | --- | --- |
-| 桌面外壳 | v0.1.6 |
+| 桌面外壳 | v0.1.7 |
 | DeepSeek Harness Runtime | `@deepseek-ai/dsh` v0.1.1-rc.2 |
 
 ## 更新日志
+
+**v0.1.7**
+
+- 安装包自带对应架构 Runtime，并在首次启动时校验、展开和复用
+- Windows x64/ARM64 同时提供可选安装目录的安装版与 Portable 单 EXE
+- `dshmarket` 改为可选的显式安装，失败不影响 Harness 启动
+- Runtime 内置 pnpm，所有桌面端 `dsh` 调用固定使用受管 Runtime
+- 修复 Windows 物理磁盘目录选择器提前断开 IPC 的问题
+- 代理设置覆盖 Electron、Node、npm/pnpm 和 Git 常见环境变量
 
 **v0.1.6**
 
@@ -206,35 +145,18 @@ pnpm harness:dist:validate
 pnpm dev
 ```
 
-### 类型检查与构建
+### 类型检查
 
 ```sh
 pnpm typecheck
-pnpm build
 pnpm test
 ```
 
-### 打包
-
-```sh
-# macOS Apple Silicon
-pnpm package:mac:arm64
-
-# macOS Apple Silicon（带代理 — 适用于企业网络环境）
-pnpm package:mac:arm64:proxy
-
-# macOS Apple Silicon（带代理 + 自动软链 Runtime）
-pnpm package:mac:arm64:proxy:runtime
-
-# 其他平台
-pnpm package:mac:x64
-pnpm package:win:arm64
-pnpm package:win:x64
-```
+发行构建（Runtime 安装、归档和 electron-builder）只在 GitHub Actions 原生 runner 中执行，不在本地执行。
 
 ## CI / Release
 
-GitHub Actions 工作流 [package.yml](.github/workflows/package.yml) 自动构建四个平台的 Shell 安装包和 Runtime Bundle。
+GitHub Actions 工作流 [package.yml](.github/workflows/package.yml) 在四个原生 runner 上分别构建、裁剪并验证 Runtime，再将单架构压缩资产嵌入对应桌面包。macOS 输出两个 DMG；Windows x64/ARM64 各输出一个 assisted NSIS 安装包和一个 Portable 单 EXE。
 
 - **手动触发**：在 Actions 页面选择 `Package Desktop Release`，可选指定 `harness_version`（默认 `0.1.1-rc.2`）
 - **自动触发**：推送 `v*` 标签时自动构建并发布 Release
@@ -247,9 +169,9 @@ Runtime 构建时从 npm registry 拉取 `@deepseek-ai/dsh`，无需依赖 deeps
 
 在 **Settings → Models** 中检查是否已保存有效 API Key、provider 和模型。
 
-### 提示找不到 Runtime Dist
+### 提示 Runtime 校验或展开失败
 
-确保 `DeepSeek-Harness-Dist` 文件夹与 `.app` 放在同一目录下，且包含 `runtime-manifest.json`。
+重新下载与你系统架构匹配的发行文件。安装包内 Runtime 会执行目标架构、manifest 和 SHA-256 校验，不支持手工替换。
 
 ### 网络请求失败
 
@@ -260,4 +182,4 @@ Runtime 构建时从 npm registry 拉取 `@deepseek-ai/dsh`，无需依赖 deeps
 - Renderer 启用 `contextIsolation` 和 `sandbox`，没有 Node integration
 - Preload 仅暴露版本化、受限的桌面 API
 - Official Harness 仅监听随机 `127.0.0.1` loopback 端口
-- Runtime manifest 不允许 CLI entry 逃逸出 `DeepSeek-Harness-Dist/` 根目录
+- Runtime 包执行 SHA-256、目标架构和 CLI entry 边界校验

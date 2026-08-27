@@ -10,6 +10,18 @@ export interface HostStatus {
   readonly url?: string
 }
 
+export type MarketState = 'not-installed' | 'installing' | 'installed' | 'failed'
+
+export interface MarketStatus {
+  readonly state: MarketState
+  readonly detail: string
+}
+
+export const EMPTY_MARKET_STATUS: MarketStatus = {
+  state: 'not-installed',
+  detail: 'Plugin market is optional and not installed.',
+}
+
 export interface WorkspaceSummary {
   readonly name: string
   readonly path: string
@@ -35,6 +47,7 @@ export const EMPTY_PROXY: ProxySettings = {
 export interface DesktopSnapshot {
   readonly apiVersion: typeof DESKTOP_API_VERSION
   readonly host: HostStatus
+  readonly market: MarketStatus
   readonly workspace?: WorkspaceSummary
   readonly proxy: ProxySettings
 }
@@ -46,5 +59,7 @@ export interface DesktopApi {
   clearWorkspace(): Promise<void>
   getProxySettings(): Promise<ProxySettings>
   setProxySettings(proxy: ProxySettings): Promise<void>
+  installMarket(): Promise<void>
   onHostStatus(listener: (status: HostStatus) => void): () => void
+  onMarketStatus(listener: (status: MarketStatus) => void): () => void
 }

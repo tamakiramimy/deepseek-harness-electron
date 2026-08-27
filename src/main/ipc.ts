@@ -1,5 +1,5 @@
-import { BrowserWindow, ipcMain } from 'electron'
-import type { DesktopApi, DesktopSnapshot, HostStatus, ProxySettings, WorkspaceSummary } from '../shared/contracts.js'
+import { BrowserWindow, ipcMain, session } from 'electron'
+import type { DesktopApi, DesktopSnapshot, HostStatus, MarketStatus, ProxySettings, WorkspaceSummary } from '../shared/contracts.js'
 import { DesktopBroker } from './desktop-broker.js'
 import { DesktopStore } from './desktop-store.js'
 import { HostSupervisor } from './host-supervisor.js'
@@ -10,7 +10,9 @@ const IPC_CHANNELS = {
   getSnapshot: 'desktop:get-snapshot',
   getProxySettings: 'desktop:get-proxy-settings',
   setProxySettings: 'desktop:set-proxy-settings',
+  installMarket: 'desktop:install-market',
   hostStatus: 'desktop:host-status',
+  marketStatus: 'desktop:market-status',
 } as const
 
 export function registerDesktopIpc(
@@ -26,7 +28,7 @@ export function registerDesktopIpc(
   }
   ipcMain.handle(IPC_CHANNELS.getSnapshot, (event): DesktopSnapshot => {
     assertMainWindow(event.sender.id)
-    return snapshot(store.workspace(), supervisor.currentStatus(), store.proxy())
+    return snapshot(store.workspace(), supervisor.currentStatus(), supervisor.currentMarketStatus(), store.proxy())
   })
   ipcMain.handle(IPC_CHANNELS.chooseWorkspace, async (event): Promise<WorkspaceSummary | undefined> => {
     assertMainWindow(event.sender.id)
@@ -48,17 +50,44 @@ export function registerDesktopIpc(
     assertMainWindow(event.sender.id)
     assertProxySettings(proxy)
     await store.setProxy(proxy)
+    await applyElectronProxy(proxy)
     await supervisor.restart(harnessHome, runtimeRoot, proxy)
+  })
+  ipcMain.handle(IPC_CHANNELS.installMarket, (event): void => {
+    assertMainWindow(event.sender.id)
+    supervisor.installMarket()
   })
   supervisor.subscribe((status) => {
     if (!mainWindow.isDestroyed()) mainWindow.webContents.send(IPC_CHANNELS.hostStatus, status)
   })
+  supervisor.subscribeMarket((status) => {
+    if (!mainWindow.isDestroyed()) mainWindow.webContents.send(IPC_CHANNELS.marketStatus, status)
+  })
 }
 
-export const desktopIpc = IPC_CHANNELS satisfies Record<keyof Omit<DesktopApi, 'version' | 'onHostStatus'>, string> & Record<'hostStatus', string>
+export const desktopIpc = IPC_CHANNELS satisfies Record<keyof Omit<DesktopApi, 'version' | 'onHostStatus' | 'onMarketStatus'>, string> & Record<'hostStatus' | 'marketStatus', string>
 
-function snapshot(workspace: WorkspaceSummary | undefined, host: HostStatus, proxy: ProxySettings): DesktopSnapshot {
-  return { apiVersion: 1, host, proxy, ...(workspace === undefined ? {} : { workspace }) }
+function snapshot(workspace: WorkspaceSummary | undefined, host: HostStatus, market: MarketStatus, proxy: ProxySettings): DesktopSnapshot {
+  return { apiVersion: 1, host, market, proxy, ...(workspace === undefined ? {} : { workspace }) }
+}
+
+export async function applyElectronProxy(proxy: ProxySettings): Promise<void> {
+  const httpProxy = proxy.httpProxy.trim()
+  const httpsProxy = proxy.httpsProxy.trim() || httpProxy
+  if (httpProxy === '' && httpsProxy === '') {
+    await session.defaultSession.setProxy({ mode: 'direct' })
+  } else {
+    const rules = [
+      ...(httpProxy === '' ? [] : [`http=${httpProxy}`]),
+      ...(httpsProxy === '' ? [] : [`https=${httpsProxy}`]),
+    ]
+    await session.defaultSession.setProxy({
+      mode: 'fixed_servers',
+      proxyRules: rules.join(';'),
+      proxyBypassRules: proxy.noProxy.trim(),
+    })
+  }
+  await session.defaultSession.closeAllConnections()
 }
 
 function assertProxySettings(value: unknown): asserts value is ProxySettings {

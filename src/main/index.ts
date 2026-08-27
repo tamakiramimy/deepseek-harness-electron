@@ -1,11 +1,12 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { existsSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { DESKTOP_API_VERSION } from '../shared/contracts.js'
 import { DesktopBroker } from './desktop-broker.js'
 import { DesktopStore } from './desktop-store.js'
 import { HostSupervisor } from './host-supervisor.js'
-import { registerDesktopIpc } from './ipc.js'
+import { applyElectronProxy, registerDesktopIpc } from './ipc.js'
+import { ensurePackagedRuntime } from './runtime-manager.js'
 
 let mainWindow: BrowserWindow | undefined
 const supervisor = new HostSupervisor()
@@ -78,8 +79,9 @@ app.whenReady().then(async () => {
   })
   const store = new DesktopStore(app.getPath('userData'))
   await store.load()
+  await applyElectronProxy(store.proxy())
   const harnessHome = join(app.getPath('userData'), 'harness')
-  const runtimeRoot = resolveHarnessRuntimeRoot()
+  const runtimeRoot = await resolveHarnessRuntimeRoot(app.getPath('userData'))
   mainWindow = createWindow()
   registerDesktopIpc(mainWindow, new DesktopBroker(), store, supervisor, harnessHome, runtimeRoot)
   await supervisor.start(harnessHome, runtimeRoot, store.proxy())
@@ -95,22 +97,17 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => supervisor.stop())
 
-function resolveHarnessRuntimeRoot(): string {
+async function resolveHarnessRuntimeRoot(userDataDirectory: string): Promise<string> {
+  if (app.isPackaged) {
+    return ensurePackagedRuntime(join(process.resourcesPath, 'harness-runtime'), userDataDirectory)
+  }
   const configured = process.env.DEEPSEEK_HARNESS_DIST
   const candidates = [
     configured === undefined ? undefined : resolve(configured),
     join(app.getPath('userData'), 'DeepSeek-Harness-Dist'),
-    ...(app.isPackaged ? packagedRuntimeCandidates() : [join(app.getAppPath(), 'DeepSeek-Harness-Dist')]),
+    join(app.getAppPath(), 'DeepSeek-Harness-Dist'),
   ]
   return candidates.find((candidate): candidate is string => candidate !== undefined && existsSync(candidate))
     ?? candidates.find((candidate): candidate is string => candidate !== undefined)
     ?? join(app.getAppPath(), 'DeepSeek-Harness-Dist')
-}
-
-function packagedRuntimeCandidates(): string[] {
-  const candidates = [join(dirname(process.execPath), 'DeepSeek-Harness-Dist')]
-  if (process.platform === 'darwin') {
-    candidates.push(join(dirname(dirname(dirname(process.resourcesPath))), 'DeepSeek-Harness-Dist'))
-  }
-  return candidates
 }

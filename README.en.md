@@ -6,86 +6,16 @@ English | [中文](README.md)
 
 ## Quick Start
 
-Download two files from [Releases](https://github.com/tamakiramimy/deepseek-harness-electron/releases):
+Download one file matching your device from [Releases](https://github.com/tamakiramimy/deepseek-harness-electron/releases). Each artifact includes its architecture-specific Runtime; no separate `DeepSeek-Harness-Dist` download or copy is required.
 
-1. **Shell installer** — choose one for your device:
-
-| Device | Installer |
+| Device | Installer / portable app |
 | --- | --- |
-| macOS Apple Silicon | `DeepSeek.Harness.Desktop-<version>-darwin-arm64.dmg` |
-| macOS Intel | `DeepSeek.Harness.Desktop-<version>-darwin-x64.dmg` |
-| Windows ARM | `DeepSeek.Harness.Desktop-<version>-win32-arm64.exe` |
-| Windows x64 | `DeepSeek.Harness.Desktop-<version>-win32-x64.exe` |
+| macOS Apple Silicon | `DeepSeek Harness Desktop-<version>-mac-arm64.dmg` |
+| macOS Intel | `DeepSeek Harness Desktop-<version>-mac-x64.dmg` |
+| Windows ARM64 | `...-win-arm64-setup.exe` or `...-win-arm64-portable.exe` |
+| Windows x64 | `...-win-x64-setup.exe` or `...-win-x64-portable.exe` |
 
-2. **Runtime Bundle** — shared across all platforms:
-
-   `DeepSeek-Harness-Dist-<version>.zip`
-
-Extract the Runtime Bundle and place the `DeepSeek-Harness-Dist` folder beside the application file, then launch:
-
-```text
-Application directory/
-├── DeepSeek Harness Desktop.app   (or .exe)
-└── DeepSeek-Harness-Dist/
-```
-
-![Directory structure](docs/images/directory-structure.png)
-
-> The Shell selects the matching Runtime for your device automatically. No further setup is needed.
-
-### Configure a global `dsh` command
-
-The Runtime Bundle includes the `dsh` CLI. Install Node.js 22 or newer, then add the matching Runtime's `node_modules/.bin` directory to `PATH`. These examples assume the bundle is extracted to `~/Applications/DeepSeek-Harness-Dist`.
-
-macOS (Apple Silicon; use `darwin-x64` instead on Intel):
-
-```sh
-mkdir -p "$HOME/.local/bin"
-ln -sfn "$HOME/Applications/DeepSeek-Harness-Dist/darwin-arm64/node_modules/.bin/dsh" "$HOME/.local/bin/dsh"
-ln -sfn "$HOME/Applications/DeepSeek-Harness-Dist/darwin-arm64/node_modules/.bin/pnpm" "$HOME/.local/bin/pnpm"
-grep -q 'HOME/.local/bin' "$HOME/.zshrc" || printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.zshrc"
-source "$HOME/.zshrc"
-dsh --version
-pnpm --version
-```
-
-Windows PowerShell (x64; use `win32-arm64` on ARM):
-
-```powershell
-$Bin = "$HOME\Applications\DeepSeek-Harness-Dist\win32-x64\node_modules\.bin"
-$UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if (($UserPath -split ';') -notcontains $Bin) {
-  [Environment]::SetEnvironmentVariable('Path', "$Bin;$UserPath", 'User')
-}
-# Reopen PowerShell, then verify
-dsh --version
-```
-
-Install the plugin market into the default CLI profile (`~/.dsh`):
-
-```sh
-dsh plugin --profile web add dshmarket
-```
-
-The desktop app has its own `$DSH_HOME`. Install a plugin into the desktop app's `web` profile with:
-
-```sh
-DSH_HOME="$HOME/Library/Application Support/deepseek-harness-electron/harness" \
-  dsh plugin --profile web add dshmarket
-```
-
-Windows PowerShell:
-
-```powershell
-$env:DSH_HOME = "$env:APPDATA\deepseek-harness-electron\harness"
-dsh plugin --profile web add dshmarket
-```
-
-This release also installs `dshmarket` automatically on the desktop app's first start. Verify the default CLI profile with:
-
-```sh
-dsh --profile web --dump-config | grep dshmarket
-```
+Windows `setup.exe` uses an assisted installer and lets you select the installation directory. `portable.exe` is a single-file, no-install executable that self-extracts when launched. On first start, the app verifies the Runtime SHA-256 and extracts it into user data for reuse.
 
 ## Key Features
 
@@ -97,11 +27,11 @@ Configure HTTP / HTTPS proxy directly from the desktop workbench — no system s
 
 ### Built-in Plugin Market
 
-The community plugin market `dshmarket` is seeded into the `web` profile on first start, so plugins can be browsed and installed from the Web UI right away.
+The community plugin market `dshmarket` is optional. App startup does not depend on it; use **Install** in the shell's **Plugin market** settings when needed, or **Retry** after a failure.
 
 The Runtime Dist bundles pnpm, and the desktop shell writes shims into `$DSH_HOME/.desktop-bin/` and puts them on the Harness child's PATH. End users therefore need neither Node nor pnpm installed — `dsh plugin` reaches its package manager by bare name and fails with exit code 127 when none is found.
 
-Seeding the market needs the npm registry. When the network is unreachable on first start, it is skipped with the reason recorded in `profiles/web/.market-seed-failed`, the Harness starts as usual, and the next start after 24 hours retries. On a corporate network, configure **Proxy** first.
+Installing the market needs the npm registry. A failure does not interrupt Harness startup. On a corporate network, configure **Proxy** and retry.
 
 ![Plugin market](docs/images/plugin-market.png)
 
@@ -159,10 +89,19 @@ Reference JSON (the same structure can be written as YAML; replace the sample UR
 
 | Component | Version |
 | --- | --- |
-| Desktop Shell | v0.1.6 |
+| Desktop Shell | v0.1.7 |
 | DeepSeek Harness Runtime | `@deepseek-ai/dsh` v0.1.1-rc.2 |
 
 ## Changelog
+
+**v0.1.7**
+
+- Bundled a matching Runtime in every artifact with verified first-start extraction and reuse
+- Added assisted installers and Portable single EXEs for both Windows x64 and ARM64
+- Made `dshmarket` an explicit optional install that cannot block Harness startup
+- Bundled pnpm and pinned every desktop `dsh` invocation to the managed Runtime
+- Fixed premature IPC disconnection in the Windows physical-drive directory picker
+- Applied proxy settings to Electron, Node, npm/pnpm, and common Git environment variables
 
 **v0.1.6**
 
@@ -206,35 +145,18 @@ pnpm harness:dist:validate
 pnpm dev
 ```
 
-### Type-check & Build
+### Type-check
 
 ```sh
 pnpm typecheck
-pnpm build
 pnpm test
 ```
 
-### Package
-
-```sh
-# macOS Apple Silicon
-pnpm package:mac:arm64
-
-# macOS Apple Silicon (with proxy — for corporate networks)
-pnpm package:mac:arm64:proxy
-
-# macOS Apple Silicon (with proxy + auto symlink Runtime)
-pnpm package:mac:arm64:proxy:runtime
-
-# Other platforms
-pnpm package:mac:x64
-pnpm package:win:arm64
-pnpm package:win:x64
-```
+Release builds (Runtime installation, archiving, and electron-builder) run only on native GitHub Actions runners, not on developer machines.
 
 ## CI / Release
 
-The [package.yml](.github/workflows/package.yml) GitHub Actions workflow builds Shell installers and a Runtime Bundle for all four platforms.
+The [package.yml](.github/workflows/package.yml) GitHub Actions workflow builds, prunes, and verifies a Runtime on each of four native runners, then embeds that single-architecture archive into its matching desktop artifact. It produces two macOS DMGs plus assisted NSIS and Portable executables for each Windows architecture.
 
 - **Manual trigger**: select `Package Desktop Release` from the Actions tab; optionally specify `harness_version` (defaults to `0.1.1-rc.2`)
 - **Auto trigger**: pushing a `v*` tag automatically builds and publishes a Release
@@ -247,9 +169,9 @@ The Runtime is built from the npm registry (`@deepseek-ai/dsh`), independent of 
 
 Check **Settings → Models** for a valid API key, provider, and model.
 
-### Runtime Dist not found
+### Runtime verification or extraction fails
 
-Make sure the `DeepSeek-Harness-Dist` folder is in the same directory as the `.app` (or `.exe`) and contains `runtime-manifest.json`.
+Download the release artifact matching your system architecture again. Runtime target, manifest, and SHA-256 verification prevent manual replacement.
 
 ### Network requests fail
 
@@ -260,4 +182,4 @@ Click the **Proxy** button in the top-right corner, enter your HTTP/HTTPS proxy 
 - Renderer uses `contextIsolation` and `sandbox`; Node integration is disabled
 - Preload exposes only a versioned, restricted desktop API
 - Official Harness listens only on a random `127.0.0.1` loopback port
-- Runtime manifest entry cannot escape the `DeepSeek-Harness-Dist/` root
+- Runtime packages are verified by SHA-256, target architecture, and CLI entry boundaries

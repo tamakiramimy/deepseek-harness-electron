@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
 import { Bot, LoaderCircle, Settings, Sparkles } from 'lucide-react'
-import type { DesktopSnapshot, HostStatus, ProxySettings } from '../../shared/contracts.js'
+import type { DesktopSnapshot, HostStatus, MarketStatus, ProxySettings } from '../../shared/contracts.js'
 
 export function App(): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<DesktopSnapshot | undefined>()
@@ -18,6 +18,10 @@ export function App(): React.JSX.Element {
     })
   }, [])
 
+  useEffect(() => window.deepseekDesktop.onMarketStatus((market) => {
+    setSnapshot((current) => current === undefined ? undefined : { ...current, market })
+  }), [])
+
   const host = snapshot?.host
 
   async function saveProxy(): Promise<void> {
@@ -27,6 +31,10 @@ export function App(): React.JSX.Element {
     } finally {
       setSaving(false)
     }
+  }
+
+  async function installMarket(): Promise<void> {
+    await window.deepseekDesktop.installMarket()
   }
 
   return (
@@ -49,17 +57,28 @@ export function App(): React.JSX.Element {
       {
   /** Proxy configuration panel: HTTP_PROXY, HTTPS_PROXY, NO_PROXY inputs.
    *  Saving triggers a harness restart so the new proxy takes effect immediately. */
-  proxyOpen && <ProxyPanel proxy={proxy} saving={saving} onChange={setProxy} onSave={saveProxy} />
+  proxyOpen && <ProxyPanel
+    proxy={proxy}
+    market={snapshot?.market}
+    marketAvailable={host?.state === 'ready'}
+    saving={saving}
+    onChange={setProxy}
+    onSave={saveProxy}
+    onInstallMarket={installMarket}
+  />
 }
     </main>
   )
 }
 
-function ProxyPanel({ proxy, saving, onChange, onSave }: {
+function ProxyPanel({ proxy, market, marketAvailable, saving, onChange, onSave, onInstallMarket }: {
   proxy: ProxySettings
+  market: MarketStatus | undefined
+  marketAvailable: boolean
   saving: boolean
   onChange: (proxy: ProxySettings) => void
   onSave: () => void
+  onInstallMarket: () => void
 }): React.JSX.Element {
   const field = (key: keyof ProxySettings) => (event: ChangeEvent<HTMLInputElement>) => {
     onChange({ ...proxy, [key]: event.target.value })
@@ -78,6 +97,18 @@ function ProxyPanel({ proxy, saving, onChange, onSave }: {
       </label>
       <div className="proxy-actions">
         <button type="button" className="proxy-save" onClick={onSave} disabled={saving}>{saving ? 'Applying…' : 'Save & apply'}</button>
+      </div>
+      <div className="market-section">
+        <div>
+          <strong>Plugin market</strong>
+          <span>{market?.detail ?? 'Plugin market is optional and not installed.'}</span>
+        </div>
+        {market?.state !== 'installed' && <button
+          type="button"
+          className="market-install"
+          onClick={onInstallMarket}
+          disabled={!marketAvailable || market?.state === 'installing'}
+        >{market?.state === 'installing' ? 'Installing…' : market?.state === 'failed' ? 'Retry' : 'Install'}</button>}
       </div>
     </div>
   )
